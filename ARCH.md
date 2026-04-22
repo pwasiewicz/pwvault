@@ -196,7 +196,7 @@ interface ICryptoService {
 
 **`DecryptNotes` z `entry.NotesEncrypted = null`:** zwraca `Success(null)` — brak notatek nie jest błędem.
 
-### IAgeGateway — wrapper nad age (implementacja pending)
+### IAgeGateway — native C# implementacja age v1
 
 ```csharp
 interface IAgeGateway {
@@ -205,12 +205,40 @@ interface IAgeGateway {
 }
 ```
 
-**Implementacja pending.** age CLI nie czyta passphrase ze stdin (wymaga TTY, świadoma decyzja autora). Rozważane ścieżki:
-1. **Pseudoterminal (PTY)** — spawn age przez ConPTY (Windows) / `forkpty` (Unix), symulacja TTY. Najbardziej uniwersalne, najwięcej kodu.
-2. **Dojrzała .NET libka age** — obecnie brak (stan na 2026). Do monitoringu.
-3. **`rage` z niestandardową obsługą passphrase** — wymaga fork/PR do rage.
+**Implementacja: `AgeV1Gateway` w `PwVault.Core.Security.Age`.** Natywny port specyfikacji [age v1](https://age-encryption.org/v1), zero subprocessów, zero PTY magic. Moduły:
 
-Do czasu wyboru — produkcyjne użycie `CryptoService` wymaga własnej implementacji `IAgeGateway`. Testy używają `FakeAgeGateway` z odwracalnym kodowaniem (base64 + osadzony passphrase) — nie jest to bezpieczne, jedynie do weryfikacji logiki `CryptoService`.
+- `AgeArmor` — PEM encode/decode (standard base64 z paddingiem, wrap 64 kol., markery `BEGIN/END AGE ENCRYPTED FILE`)
+- `AgeHeaderCodec` — build/parse nagłówka (linia wersji, scrypt stanza, MAC), odtwarza dokładne bajty dla HMAC
+- `AgePayload` — chunked AEAD (64 KiB, ChaCha20-Poly1305, 12-bajtowy nonce = 11B big-endian counter + 1B last-flag)
+- `ScryptKdf` — wrapper nad BouncyCastle scrypt (N=2^WF, r=8, p=1, dkLen=32, salt prefiksowany `"age-encryption.org/v1/scrypt"`)
+- `AgeV1Gateway` — orchestrator (generuje file-key + nonce, wrap file-key przez ChaCha20-Poly1305 z zero nonce, HKDF-SHA256 dla MAC key i payload key, HMAC-SHA256 nad nagłówkiem)
+
+**Zależności krypto:**
+- `Geralt` — ChaCha20-Poly1305 (wrapper nad libsodium)
+- `BouncyCastle.Cryptography` — scrypt (brak w built-in .NET ani w Geralt)
+- Built-in `System.Security.Cryptography` — HKDF-SHA256, HMAC-SHA256, RandomNumberGenerator, `CryptographicOperations.FixedTimeEquals` dla MAC comparison, `CryptographicOperations.ZeroMemory` dla kasowania wrażliwych buforów
+
+**Parametry:**
+- Default encrypt work factor: **18** (zgodnie z age default, ~1s scrypt na współczesnym CPU)
+- Minimum akceptowany przy encrypt: **10** (zabezpieczenie przed słabym KDF w kodzie)
+- Maximum akceptowany przy decrypt: **22** (zabezpieczenie DoS — preparowany plik z WF=30 zająłby minuty)
+- Test WF: **10** (N=1024, deszyfracja w ms zamiast sekundy)
+
+**Obsługa błędów:**
+- `InvalidPassphraseException : AgeDecryptionException` — ChaCha20-Poly1305 auth fail przy unwrapie file-key (jednoznaczny sygnał złego hasła)
+- `AgeDecryptionException` — pozostałe błędy deszyfracji (MAC mismatch, tampering, zbyt wysokie WF)
+- `FormatException` — uszkodzony nagłówek / armor
+
+**Weryfikacja interop:**
+- Testy unit: 32 testy per moduł + end-to-end roundtrip, multi-chunk, unicode
+- Testy integracyjne (`AgeBinaryInteropTests`) — kierunek obu stron przeciwko prawdziwemu `age` binary:
+  - `Our encrypt → age -d decrypt` (byte-exact)
+  - `age -p encrypt → Our decrypt` (byte-exact)
+  - Multi-chunk 200KB, unicode, empty payload
+- Automatyczne skipowanie jeśli `age` lub `script` nie są w PATH (np. Windows)
+- PTY dla TTY wymagania age — via Linux `script -qec` z stdin fed passphrase, obchodzi /dev/tty requirement nie dotykając ConPTY/forkpty bezpośrednio
+
+**Zero custom krypto.** Prymitywy pochodzą z dojrzałych libek (libsodium via Geralt, BouncyCastle scrypt, built-in .NET HKDF/HMAC). Nasz kod to jedynie format assembly/parsing — byte layout weryfikowany przez interop tests.
 
 ## TTL i fallback (CLI workflow)
 
