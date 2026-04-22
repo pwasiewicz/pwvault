@@ -266,26 +266,30 @@ interface IAgeGateway {
 
 ## Scope
 
-### MVP (tydzień 1)
+### MVP (zrobione)
 
-- [ ] `pwvault init <path>` — inicjalizacja vaulta (katalog + README + FORMAT.md + recover.sh + .gitignore)
-- [ ] `pwvault unlock` — prompt o master password, zapis do session store z TTL
-- [ ] `pwvault lock` — wyczyść session
-- [ ] `pwvault add <path>` — dodaj wpis (prompty o title, url, username, password, notes)
-- [ ] `pwvault get <path> [-c]` — pokaż wpis, `-c` kopiuj hasło do schowka (auto-clear 15s)
-- [ ] `pwvault ls [path]` — drzewo wpisów
-- [ ] `pwvault rm <path>` — usuń wpis
-- [ ] `pwvault gen [length]` — generator haseł (CSPRNG)
-- [ ] Auto-commit + push po każdej mutacji
+- [x] `pwvault init <path>` — inicjalizacja vaulta (katalog + README + FORMAT.md + recover.sh + `.vault.json` z sentinel + git init + initial commit)
+- [x] `pwvault unlock` — prompt o master password, weryfikacja sentinel, zapis do session store z TTL
+- [x] `pwvault lock` — wyczyść session
+- [x] `pwvault add <path>` — dodaj wpis (prompty albo flagi: title, url, username, password/generate, notes), szyfruje, zapisuje, auto-commit
+- [x] `pwvault get <path> [-c|--show|--notes]` — deszyfruje, default clipboard z auto-clear, `--show` stdout
+- [x] `pwvault ls [path] [--flat]` — drzewo wpisów
+- [x] `pwvault rm <path> [-y]` — usuń wpis (confirm prompt, bypass `-y`), auto-commit
+- [x] `pwvault search <query>` — fuzzy po plaintext metadata (FuzzySharp)
+- [x] `pwvault gen [length] [--no-symbols] [-c]` — generator haseł (CSPRNG)
+- [x] Auto-commit po każdej mutacji (konfigurowalne; auto-push opcjonalne)
 
-### Iteracja 2 (tydzień 2)
+**Weryfikacja master:** `.vault.json` z encrypted sentinel (stały plaintext `pwvault-sentinel-v1` zaszyfrowany master passwordem). Weryfikacja przed każdym write — zapobiega zapisom z typo w master password, które byłyby potem nieodzyskiwalne.
 
-- [ ] `pwvault search <query>` — fuzzy po plaintext metadata
+**Stack:** `Spectre.Console.Cli` (routing + settings) + `Spectre.Console` (TUI prompts, tree, tables, progress) + `Microsoft.Extensions.DependencyInjection` (DI bridge przez `TypeRegistrar`/`TypeResolver`). `TextCopy` dla clipboard.
+
+### Iteracja 2 (planowane)
+
 - [ ] `pwvault edit <path>` — edycja istniejącego wpisu
 - [ ] `pwvault mv <src> <dst>` — przenoszenie
 - [ ] `pwvault import bitwarden <json>` — import z Bitwardena
-- [ ] Interaktywny TUI picker (`pwvault` bez argumentów → Spectre.Console lista z fuzzy)
-- [ ] `pwvault rotate-master` — rotacja master password (re-encrypt wszystkich pól `*_age`)
+- [ ] Interaktywny TUI picker (`pwvault` bez argumentów → Spectre.Console lista z live fuzzy)
+- [ ] `pwvault rotate-master` — rotacja master password (re-encrypt wszystkich pól `*_age` + sentinel)
 
 ### Iteracja 3 (web)
 

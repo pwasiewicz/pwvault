@@ -59,11 +59,15 @@ public sealed class VaultStorage : IVaultStorage
         var result = new List<StoredEntry>();
         foreach (var file in _fs.EnumerateFiles(directory, $"*{EntryFileExtension}", recursive: true))
         {
+            if (IsReservedFile(file)) continue;
             var stored = LoadEntryFromFile(file);
             if (stored is not null) result.Add(stored);
         }
         return result;
     }
+
+    private static bool IsReservedFile(string fullPath) =>
+        Path.GetFileName(fullPath).StartsWith('.');
 
     public StoredEntry? TryGet(EntryPath path)
     {
