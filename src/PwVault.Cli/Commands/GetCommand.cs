@@ -27,8 +27,12 @@ public sealed class GetCommand : Command<GetCommand.Settings>
 
     public sealed class Settings : BaseCommandSettings
     {
-        [CommandArgument(0, "<path>")]
-        public string Path { get; init; } = "";
+        [CommandArgument(0, "[path]")]
+        public string? Path { get; init; }
+
+        [CommandOption("-i|--interactive")]
+        [Description("Pick an entry from a live-filtering picker (type to filter by path/title/username/tags).")]
+        public bool Interactive { get; init; }
 
         [CommandOption("-c|--clip")]
         [Description("Copy password to clipboard (auto-clears). Default behavior.")]
@@ -41,15 +45,28 @@ public sealed class GetCommand : Command<GetCommand.Settings>
         [CommandOption("--notes")]
         [Description("Also print decrypted notes.")]
         public bool IncludeNotes { get; init; }
+
+        public override ValidationResult Validate()
+        {
+            var hasPath = !string.IsNullOrWhiteSpace(Path);
+            if (hasPath && Interactive)
+                return ValidationResult.Error("Cannot combine -i with an explicit path.");
+            if (!hasPath && !Interactive)
+                return ValidationResult.Error("Provide a path or use -i for the interactive picker.");
+            return ValidationResult.Success();
+        }
     }
 
     protected override int Execute(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
         var vaultPath = VaultPathResolver.Resolve(settings, _config);
-        var entryPath = new EntryPath(settings.Path);
 
         using var storage = VaultStorage.Open(vaultPath, _fs);
-        var stored = storage.Get(entryPath);
+        var stored = settings.Interactive
+            ? InteractiveEntryPicker.Pick(storage, "Select entry")
+            : storage.Get(new EntryPath(settings.Path!));
+
+        if (stored is null) return 0;
 
         _auth.Authenticate(vaultPath);
 

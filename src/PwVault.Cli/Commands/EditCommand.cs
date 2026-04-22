@@ -33,9 +33,13 @@ public sealed class EditCommand : Command<EditCommand.Settings>
 
     public sealed class Settings : BaseCommandSettings
     {
-        [CommandArgument(0, "<path>")]
-        [Description("Entry path, e.g. 'banking/mbank'.")]
-        public string Path { get; init; } = "";
+        [CommandArgument(0, "[path]")]
+        [Description("Entry path, e.g. 'banking/mbank'. Omit when using -i.")]
+        public string? Path { get; init; }
+
+        [CommandOption("-i|--interactive")]
+        [Description("Pick entry from a live-filtering picker before editing.")]
+        public bool Interactive { get; init; }
 
         [CommandOption("--title <TITLE>")]
         public string? Title { get; init; }
@@ -87,6 +91,12 @@ public sealed class EditCommand : Command<EditCommand.Settings>
 
         public override ValidationResult Validate()
         {
+            var hasPath = !string.IsNullOrWhiteSpace(Path);
+            if (hasPath && Interactive)
+                return ValidationResult.Error("Cannot combine -i with an explicit path.");
+            if (!hasPath && !Interactive)
+                return ValidationResult.Error("Provide a path or use -i for the interactive picker.");
+
             if (Password && Regenerate)
                 return ValidationResult.Error("Cannot combine --password and --regenerate.");
             if (Length.HasValue && !Regenerate)
@@ -118,10 +128,14 @@ public sealed class EditCommand : Command<EditCommand.Settings>
     protected override int Execute(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
         var vaultPath = VaultPathResolver.Resolve(settings, _config);
-        var entryPath = new EntryPath(settings.Path);
 
         using var storage = VaultStorage.Open(vaultPath, _fs);
-        var stored = storage.Get(entryPath);
+        var stored = settings.Interactive
+            ? InteractiveEntryPicker.Pick(storage, "Select entry to edit")
+            : storage.Get(new EntryPath(settings.Path!));
+
+        if (stored is null) return 0;
+        var entryPath = stored.Entry.Path;
         var current = stored.Entry;
 
         var plan = BuildPlan(settings, current);

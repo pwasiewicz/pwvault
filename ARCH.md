@@ -284,6 +284,7 @@ interface IAgeGateway {
 - [x] `pwvault tags` — lista tagów w użyciu z licznikami
 - [x] Tagi — `--tag <name>` (repeatable) w `add`, `ls`, `search`; normalizacja kanoniczna w `TagNormalizer`
 - [x] `pwvault edit <path>` — edycja istniejącego wpisu (interactive albo flag-driven); path immutable (rename → `mv`)
+- [x] Interactive picker (`-i` w `get` i `edit`) — `Spectre.Console.SelectionPrompt.EnableSearch()`, substring match po display stringu (path/title/username/tags), współdzielony `InteractiveEntryPicker` w `PwVault.Cli.Infrastructure`
 - [x] Auto-commit po każdej mutacji (konfigurowalne; auto-push opcjonalne)
 
 **Weryfikacja master:** `.vault.json` z encrypted sentinel (stały plaintext `pwvault-sentinel-v1` zaszyfrowany master passwordem). Weryfikacja przed każdym write — zapobiega zapisom z typo w master password, które byłyby potem nieodzyskiwalne.

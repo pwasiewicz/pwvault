@@ -63,6 +63,9 @@ Tagi są normalizowane automatycznie: `--tag Banking` == `--tag banking` == `--t
 ### Edycja wpisów
 
 ```bash
+# Nie pamiętasz path — interactive picker najpierw, potem prompt po każdym polu
+pwvault edit -i
+
 # Interaktywnie — prompt o każde pole z obecną wartością jako default
 pwvault edit dev/github
 
@@ -104,7 +107,14 @@ pwvault get banking/mbank --show
 
 # Razem z notatkami (prompt o master jeśli sesja wygasła)
 pwvault get banking/mbank --notes
+
+# Interactive picker — type to filter po path / title / username / tagach
+pwvault get -i                # wybór z listy live-filtrowanej, potem clipboard
+pwvault get -i --show         # wybór z listy, potem stdout
+pwvault get -i --notes        # wybór z listy, plus odszyfrowane notatki
 ```
+
+Picker ładuje wszystkie wpisy, sortuje po path, a Ty piszesz żeby odfiltrować — `Spectre.Console` robi substring match (piszesz `mba` → widzisz `banking/mbank`, `personal/mba-test`). Działa też na tagach (`2fa` filtruje do wpisów z tagiem 2fa). Enter wybiera, ↑/↓ scroll.
 
 ### Listowanie i wyszukiwanie
 
