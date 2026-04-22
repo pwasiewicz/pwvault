@@ -1,0 +1,43 @@
+## .NET build output
+bin/
+obj/
+
+## IDE
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+
+## Rider / ReSharper
+_ReSharper*/
+*.DotSettings.user
+
+## Test output
+TestResults/
+*.trx
+*.coverage
+coverage*.xml
+coverage*.json
+
+## NuGet
+*.nupkg
+*.snupkg
+.nuget/
+
+## OS junk
+.DS_Store
+Thumbs.db
+
+## Local secrets / user state (this is a password manager — extra paranoid)
+*.session
+session
+session.json
+vault.backup.*/
+*.kdbx
+*.age
+!vault/**/*.age
+
+## Editor swap files
+*.swp
+*~
