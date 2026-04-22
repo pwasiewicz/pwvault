@@ -214,38 +214,42 @@ public sealed class EditCommand : Command<EditCommand.Settings>
 
     private EditPlan PlanFromPrompts(VaultEntry current)
     {
-        AnsiConsole.MarkupLine($"[dim]Editing {Markup.Escape(current.Path.Value)}. Press Enter to keep current value.[/]");
+        AnsiConsole.MarkupLine(
+            $"[dim]Editing {Markup.Escape(current.Path.Value)}. Press Enter to keep the current value.[/]");
+        AnsiConsole.MarkupLine(
+            "[dim]To clear a field, cancel and re-run with --clear-username / --clear-url / --clear-notes / --clear-tags.[/]");
         var plan = new EditPlan();
 
         var title = AnsiConsole.Prompt(
             new TextPrompt<string>("Title:").DefaultValue(current.Title).ShowDefaultValue());
         if (title != current.Title) plan.NewTitle = title;
 
+        var usernameDefault = current.Username ?? "";
         var username = AnsiConsole.Prompt(
-            new TextPrompt<string>("Username (empty to clear):")
-                .DefaultValue(current.Username ?? "")
+            new TextPrompt<string>("Username:")
+                .DefaultValue(usernameDefault)
                 .ShowDefaultValue()
                 .AllowEmpty());
         var usernameNew = string.IsNullOrWhiteSpace(username) ? null : username;
         if (usernameNew != current.Username) plan.SetUsername(usernameNew);
 
+        var urlDefault = current.Url ?? "";
         var url = AnsiConsole.Prompt(
-            new TextPrompt<string>("URL (empty to clear):")
-                .DefaultValue(current.Url ?? "")
+            new TextPrompt<string>("URL:")
+                .DefaultValue(urlDefault)
                 .ShowDefaultValue()
                 .AllowEmpty());
         var urlNew = string.IsNullOrWhiteSpace(url) ? null : url;
         if (urlNew != current.Url) plan.SetUrl(urlNew);
 
+        var tagsDefault = string.Join(", ", current.Tags);
         var tagsInput = AnsiConsole.Prompt(
-            new TextPrompt<string>("Tags (comma-separated, empty to clear):")
-                .DefaultValue(string.Join(", ", current.Tags))
+            new TextPrompt<string>("Tags (comma-separated):")
+                .DefaultValue(tagsDefault)
                 .ShowDefaultValue()
                 .AllowEmpty());
-        var newTags = string.IsNullOrWhiteSpace(tagsInput)
-            ? Array.Empty<string>()
-            : tagsInput.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        var normalizedTags = TagNormalizer.Normalize(newTags);
+        var parsedTags = tagsInput.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var normalizedTags = TagNormalizer.Normalize(parsedTags);
         if (!normalizedTags.SequenceEqual(current.Tags, StringComparer.Ordinal))
             plan.NewTags = normalizedTags;
 
