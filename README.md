@@ -19,7 +19,7 @@ Wymaga .NET 10 SDK. `age` binary nie jest wymagane do działania (mamy natywną 
 ## Quickstart
 
 ```bash
-# Ustaw ścieżkę vaulta raz (albo przekazuj --vault-path przy każdej komendzie)
+# Ustaw ścieżkę vaulta raz (albo przekazuj --vault <path> przy każdej komendzie)
 export PWVAULT_PATH=~/vault
 
 # 1. Inicjalizacja — tworzy katalog, .vault.json z sentinelem, README/FORMAT/recover.sh, git init
@@ -113,7 +113,7 @@ pwvault rm personal/old-service -y      # bypass promptu
 ### Generator haseł
 
 ```bash
-pwvault gen                # 20 znaków ze symbolami, do stdout
+pwvault gen                # 24 znaki ze symbolami, do stdout (default z configu)
 pwvault gen 32             # 32 znaki
 pwvault gen --no-symbols   # tylko alfanumeryczne
 pwvault gen -c             # do clipboardu z auto-clear
@@ -145,8 +145,8 @@ Działa na dowolnej maszynie z `age` (apt/brew/winget/scoop/GitHub releases) i `
 ```json
 {
   "vault_path": "/home/you/vault",
-  "generated_password_length": 20,
-  "clipboard_clear_seconds": 30,
+  "generated_password_length": 24,
+  "clipboard_clear_seconds": 15,
   "auto_commit": true,
   "auto_push": false,
   "work_factor": 18,
@@ -154,7 +154,7 @@ Działa na dowolnej maszynie z `age` (apt/brew/winget/scoop/GitHub releases) i `
 }
 ```
 
-Override przez env: `PWVAULT_PATH`, flaga `--vault-path` na każdej komendzie.
+Override przez env: `PWVAULT_PATH`, flaga `--vault <path>` na każdej komendzie.
 
 ## Scope
 
