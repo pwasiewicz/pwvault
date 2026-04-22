@@ -144,31 +144,79 @@ Master password odblokowany raz na sesję, cache'owany z TTL. Implementacja per-
 - Klucz deszyfrujący trzyma OS (związany z loginem Windows)
 - Kopia pliku na inną maszynę / innego usera = bezużyteczna
 
-### Abstrakcja
+### Abstrakcja (`PwVault.Core.Security`)
 
 ```csharp
 interface ISessionStore {
-    void Save(string masterPassword, DateTime expiresAt);
-    string? TryLoad();   // null jeśli brak/wygasł
+    void Save(string masterPassword);     // initial TTL 1h
+    string? TryGetAndExtend();            // null jeśli brak/wygasł; wydłuża sesję
     void Clear();
 }
 
-static ISessionStore Create() =>
-    OperatingSystem.IsWindows() ? new WindowsDpapiStore()
-    : OperatingSystem.IsMacOS() ? new MacFileStore()
-    : new LinuxTmpfsStore();
+static class SessionStoreFactory {
+    public static ISessionStore Create(TimeProvider? time = null);
+}
 ```
+
+Implementacje (obie w `Core`):
+- `FileSessionStore` — Linux (WSL2) i macOS. JSON plaintext, permissions `0600` wymuszone przez `FileStreamOptions.UnixCreateMode` przy tworzeniu pliku tymczasowego, atomic write przez temp-then-rename.
+- `WindowsSessionStore` — `ProtectedData.Protect` (DPAPI, `DataProtectionScope.CurrentUser`) nad JSON w UTF-8, zapis jako binary blob. Typ oznaczony `[SupportedOSPlatform("windows")]`.
+
+### Semantyka TTL
+
+- **Initial TTL:** 1h od `Save`.
+- **Sliding extend:** każde udane `TryGetAndExtend` gwarantuje że do wygaśnięcia zostaje **co najmniej 30 minut** od `now`. Formalnie: `new_expires = max(current_expires, now + 30min)`. Nigdy nie skraca; nie rośnie w nieskończoność; pozwala aktywnej sesji nie wygasnąć w środku pracy.
+- **Expiration:** gdy `expires_at <= now`, plik zostaje skasowany, `TryGetAndExtend` zwraca `null`.
+- **Korupcja pliku** (JSON / DPAPI): traktujemy jako brak sesji (kasujemy plik, zwracamy `null`).
+
+Stałe `SessionTtl.Initial` (1h) i `SessionTtl.MinAfterUse` (30min) są publiczne. Oba stores przyjmują też nadpisane wartości w konstruktorze — używane w testach z `FakeTimeProvider`.
 
 ### Świadoma asymetria
 
 Windows dostaje darmowy OS-level key wrapping (DPAPI). Linux poprzestaje na `0600` + tmpfs + TTL. Na Linuksie nie ma natywnego odpowiednika DPAPI w BCL, a libsecret/keyring daemon są zawodne (szczególnie w WSL2). Dla threat modelu osobistego narzędzia — wystarczy.
 
-## TTL i fallback
+## CryptoService i IAgeGateway
 
-- Domyślny TTL sesji: 1h (konfigurowalne)
-- `pwvault unlock` — prompt o master password, zapis do session store
-- `pwvault get <name>` — jeśli sesja jest i niewygasła, użyj; jeśli nie, zapytaj o master password (ad-hoc, bez zapisu)
-- `pwvault lock` — wyczyść session store
+Warstwa `PwVault.Core.Security` udostępnia też kontrakt szyfrowania:
+
+```csharp
+enum DecryptionStatus { Success, MasterNeeded }
+
+sealed record DecryptionResult(DecryptionStatus Status, string? PlainText);
+
+interface ICryptoService {
+    DecryptionResult DecryptPassword(VaultEntry entry, string? masterPassword = null);
+    DecryptionResult DecryptNotes(VaultEntry entry, string? masterPassword = null);
+}
+```
+
+**Algorytm:** jeśli `masterPassword` podany → używamy go (bez dotykania session store). Jeśli `null` → `_sessionStore.TryGetAndExtend()`. Gdy session też zwróci `null` → `DecryptionResult.MasterNeeded`.
+
+**Dlaczego podany master nie odświeża sesji:** session refresh jest efektem ubocznym komendy `unlock`, nie deszyfracji ad-hoc z jawnie podanym hasłem (np. jednorazowe wywołanie z CI lub pipe). Rozdział świadomy — `unlock` i `decrypt` mają różne kontrakty.
+
+**`DecryptNotes` z `entry.NotesEncrypted = null`:** zwraca `Success(null)` — brak notatek nie jest błędem.
+
+### IAgeGateway — wrapper nad age (implementacja pending)
+
+```csharp
+interface IAgeGateway {
+    string Decrypt(string asciiArmor, string passphrase);
+    string Encrypt(string plaintext, string passphrase);
+}
+```
+
+**Implementacja pending.** age CLI nie czyta passphrase ze stdin (wymaga TTY, świadoma decyzja autora). Rozważane ścieżki:
+1. **Pseudoterminal (PTY)** — spawn age przez ConPTY (Windows) / `forkpty` (Unix), symulacja TTY. Najbardziej uniwersalne, najwięcej kodu.
+2. **Dojrzała .NET libka age** — obecnie brak (stan na 2026). Do monitoringu.
+3. **`rage` z niestandardową obsługą passphrase** — wymaga fork/PR do rage.
+
+Do czasu wyboru — produkcyjne użycie `CryptoService` wymaga własnej implementacji `IAgeGateway`. Testy używają `FakeAgeGateway` z odwracalnym kodowaniem (base64 + osadzony passphrase) — nie jest to bezpieczne, jedynie do weryfikacji logiki `CryptoService`.
+
+## TTL i fallback (CLI workflow)
+
+- `pwvault unlock` — prompt o master password, zapis do session store (TTL 1h)
+- `pwvault get <name>` — `CryptoService.DecryptPassword(entry)` → jeśli `MasterNeeded`, prompt i retry z `masterPassword` argumentem (bez zapisu do sesji, chyba że CLI zdecyduje)
+- `pwvault lock` — `sessionStore.Clear()`
 - Zmiana środowiska/device nie psuje nic — fallback do promptu zawsze działa
 
 ## Git workflow
