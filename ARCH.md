@@ -29,25 +29,39 @@ vault/
 └── README.md          # jak odpalić recovery
 ```
 
-### Schemat wpisu
+### Schemat wpisu (v1)
+
+Jeden plik JSON per wpis. Lokalizacja: `{vault_root}/{entry_path}.json`. `entry_path` to logiczna ścieżka z `/` jako separatorem (niezależnie od OS).
 
 ```json
 {
+  "schema_version": 1,
   "title": "mBank",
-  "url": "https://mbank.pl",
   "username": "pat@example.com",
-  "tags": ["banking", "pl"],
+  "url": "https://mbank.pl",
   "password_age": "-----BEGIN AGE ENCRYPTED FILE-----\n...\n-----END AGE ENCRYPTED FILE-----",
   "notes_age": "-----BEGIN AGE ENCRYPTED FILE-----\n...\n-----END AGE ENCRYPTED FILE-----",
-  "updated": "2026-04-22"
+  "created": "2026-04-22T10:30:00.0000000+00:00",
+  "updated": "2026-04-22T10:30:00.0000000+00:00"
 }
 ```
 
-**Plaintext fields (świadomy trade-off):** `title`, `url`, `username`, `tags`, `updated`. Git log dla danego pliku ujawnia historię zmian. Akceptowane — nikt nie robi targeted reverse engineering naszego osobistego vaulta.
+**Plaintext fields (świadomy trade-off):** `schema_version`, `title`, `username`, `url`, `created`, `updated`. Git log per-wpis ujawnia historię zmian. Akceptowane — nikt nie robi targeted reverse engineering osobistego vaulta.
 
-**Zaszyfrowane fields:**
-- `password_age` — właściwe hasło
-- `notes_age` — notatki (opcjonalne, ale gdy są to **zawsze szyfrowane** — tu lądują security answers, recovery codes, PINy)
+**Zaszyfrowane fields (zawsze ASCII-armored age):**
+- `password_age` — właściwe hasło (wymagane, zawsze obecne)
+- `notes_age` — notatki (opcjonalne, ale **gdy są, to zawsze szyfrowane**; tu lądują security answers, recovery codes, PINy)
+
+**Nullability:** `username`, `url`, `notes_age` mogą być `null` / nieobecne. `title` i `password_age` są wymagane. `schema_version`, `created`, `updated` wypełniane przez storage.
+
+**Ścieżka logiczna (`EntryPath`):** forward-slash separated, bez wiodącego/końcowego `/`, bez `..`, bez znaków kontrolnych. Przykłady: `banking/mbank`, `dev/github`, `gmail`.
+
+### Rozdział domain vs serializacja
+
+- **Domena** (eksponowana z Core, używana przez CLI/Web): `VaultEntry` — immutable record z typami wartościowymi (`EncryptedField` struct, `EntryPath` struct).
+- **Serializacja** (internal): `EntryFileModel` — płaski DTO z `string`-ami, 1:1 z JSON. Mapowanie w `EntryMapper`.
+
+Powód: izolacja zmian formatu pliku (`schema_version`, migracje) od typów używanych w logice aplikacji.
 
 ### Szyfrowanie — age passphrase mode
 
@@ -55,6 +69,44 @@ vault/
 - KDF: scrypt (standard age)
 - Każde pole szyfrowane osobno z tym samym master password
 - ~1s scrypt per deszyfracja — akceptowalne przy unlock-one, świadomie odrzucone unlock-all
+
+### Storage API (warstwa `PwVault.Core`)
+
+Interfejs surowy (bez szyfrowania — storage operuje na już-zaszyfrowanych polach):
+
+```csharp
+interface IVaultStorage : IDisposable {
+    string RootPath { get; }
+    IReadOnlyList<StoredEntry> List(EntryPath? underPath = null);
+    StoredEntry? TryGet(EntryPath path);
+    StoredEntry  Get(EntryPath path);         // throws EntryNotFoundException
+    StoredEntry  Add(VaultEntry entry);       // throws EntryAlreadyExistsException
+    StoredEntry  Update(VaultEntry entry);    // throws EntryNotFoundException
+    void         Remove(EntryPath path);
+    IReadOnlyList<StoredEntry> Search(string query, int maxResults = 20);
+}
+```
+
+**Session pattern:** `using var storage = VaultStorage.Open("/path/to/vault");` — operacje w obrębie scope'u, `Dispose()` zamyka. Na razie session jest lekki (trzyma path + IFileSystem). Miejsce na przyszłe: file locks, in-memory cache, transakcje.
+
+**Factory:**
+```csharp
+VaultStorage.Open(string rootPath, IFileSystem? fs = null, TimeProvider? time = null);
+```
+
+Default `IFileSystem` = `RealFileSystem`. Wstrzykiwany dla testów / in-memory sandboxu.
+
+**Gdzie trzymać referencję do vault directory:** na razie CLI dostaje path jako argument i przekazuje do `Open`. Przyszłe iteracje: `~/.config/pwvault/config.json` z `vault_path` + opcjonalnie vault marker file (`.pwvault`) żeby odróżnić katalog vaulta od losowego folderu.
+
+### Abstrakcja filesystemu
+
+`IFileSystem` — minimum co storage potrzebuje:
+- `FileExists`, `DirectoryExists`, `CreateDirectory`
+- `ReadAllText`, `WriteAllTextAtomic` (temp-then-rename, atomic na tym samym FS)
+- `DeleteFile`, `EnumerateFiles(dir, pattern, recursive)`
+- `GetFileInfo` → `FileInfoSnapshot(FullPath, SizeBytes, CreatedUtc, ModifiedUtc)`
+
+`RealFileSystem` używa `System.IO`. Testy używają tmp dir + `RealFileSystem` (prostsze, testuje realne ścieżki kodu). `InMemoryFileSystem` do dodania gdy będzie potrzebny dla wydajności testów.
 
 ### Dlaczego nie intermediate key
 
