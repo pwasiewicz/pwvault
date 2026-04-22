@@ -33,6 +33,7 @@ app.Configure(c =>
     c.AddCommand<UnlockCommand>("unlock").WithDescription("Prompt for master password and cache in session.");
     c.AddCommand<LockCommand>("lock").WithDescription("Clear the cached master password.");
     c.AddCommand<AddCommand>("add").WithDescription("Add a new entry.");
+    c.AddCommand<EditCommand>("edit").WithDescription("Edit an existing entry.");
     c.AddCommand<GetCommand>("get").WithDescription("Fetch an entry; default copies password to clipboard.");
     c.AddCommand<LsCommand>("ls").WithDescription("List entries as a tree.");
     c.AddCommand<RmCommand>("rm").WithDescription("Remove an entry.");

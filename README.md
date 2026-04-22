@@ -60,6 +60,39 @@ pwvault add banking/revolut --notes "PIN: 1234 / security Q: pet name"
 
 Tagi są normalizowane automatycznie: `--tag Banking` == `--tag banking` == `--tag BANKING` (lowercase, dedup, sort ordinal). Bez spacji, bez `/`, max 50 znaków.
 
+### Edycja wpisów
+
+```bash
+# Interaktywnie — prompt o każde pole z obecną wartością jako default
+pwvault edit dev/github
+
+# Zmień tylko jedno pole (bez promptu o master, jeśli nie dotyka password/notes)
+pwvault edit dev/github --title "GitHub Enterprise"
+pwvault edit dev/github --username pat+new@example.com
+pwvault edit dev/github --url https://github.example.com
+
+# Wyczyść opcjonalne pole
+pwvault edit dev/github --clear-url
+pwvault edit dev/github --clear-notes
+
+# Tagi — dwa style (nie można mieszać)
+pwvault edit dev/github --tag dev --tag 2fa             # REPLACE całą listą
+pwvault edit dev/github --add-tag work --remove-tag old  # diff względem obecnych
+pwvault edit dev/github --clear-tags
+
+# Hasło — żąda master (sentinel check + re-encrypt)
+pwvault edit dev/github --password                      # prompt z confirm
+pwvault edit dev/github --regenerate                    # CSPRNG
+pwvault edit dev/github --regenerate --length 40
+
+# Notatki (szyfrowane)
+pwvault edit dev/github --notes "new security Q: mother's maiden name"
+```
+
+Edit jest **lazy auth**: metadata-only (title, username, url, tags) nie pyta o master. Dopiero `--password`, `--regenerate`, `--notes` lub `--clear-notes` wymagają master (sentinel check + re-encrypt).
+
+Path jest immutable — zmiana ścieżki to `pwvault mv` (iteracja 2).
+
 ### Pobieranie hasła
 
 ```bash

@@ -247,6 +247,7 @@ interface IAgeGateway {
 
 - `pwvault unlock` — prompt o master password, zapis do session store (TTL 1h)
 - `pwvault get <name>` — `CryptoService.DecryptPassword(entry)` → jeśli `MasterNeeded`, prompt i retry z `masterPassword` argumentem (bez zapisu do sesji, chyba że CLI zdecyduje)
+- `pwvault edit <name>` — **lazy auth**: master wymagany tylko gdy zmiana dotyka pola szyfrowanego (`--password`, `--regenerate`, `--notes`, `--clear-notes`). Edycja samej metadanych (title/url/tags) nie żąda master password ani nie sprawdza sentinela. Świadomy trade-off: sentinel chroni przed typo przy re-encrypt, a metadata-only edit niczego nie re-encryptuje.
 - `pwvault lock` — `sessionStore.Clear()`
 - Zmiana środowiska/device nie psuje nic — fallback do promptu zawsze działa
 
@@ -282,6 +283,7 @@ interface IAgeGateway {
 - [x] `pwvault gen [length] [--no-symbols] [-c]` — generator haseł (CSPRNG)
 - [x] `pwvault tags` — lista tagów w użyciu z licznikami
 - [x] Tagi — `--tag <name>` (repeatable) w `add`, `ls`, `search`; normalizacja kanoniczna w `TagNormalizer`
+- [x] `pwvault edit <path>` — edycja istniejącego wpisu (interactive albo flag-driven); path immutable (rename → `mv`)
 - [x] Auto-commit po każdej mutacji (konfigurowalne; auto-push opcjonalne)
 
 **Weryfikacja master:** `.vault.json` z encrypted sentinel (stały plaintext `pwvault-sentinel-v1` zaszyfrowany master passwordem). Weryfikacja przed każdym write — zapobiega zapisom z typo w master password, które byłyby potem nieodzyskiwalne.
@@ -290,7 +292,6 @@ interface IAgeGateway {
 
 ### Iteracja 2 (planowane)
 
-- [ ] `pwvault edit <path>` — edycja istniejącego wpisu
 - [ ] `pwvault mv <src> <dst>` — przenoszenie
 - [ ] `pwvault import bitwarden <json>` — import z Bitwardena
 - [ ] Interaktywny TUI picker (`pwvault` bez argumentów → Spectre.Console lista z live fuzzy)
