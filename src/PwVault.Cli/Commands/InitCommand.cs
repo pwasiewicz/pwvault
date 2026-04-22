@@ -55,7 +55,7 @@ public sealed class InitCommand : Command<InitCommand.Settings>
 
         Directory.CreateDirectory(path);
 
-        AnsiConsole.MarkupLine($"[bold]Initializing vault at:[/] {path}");
+        AnsiConsole.MarkupLine($"[bold]Initializing vault at:[/] {Markup.Escape(path)}");
         var master = MasterPasswordPrompt.AskWithConfirmation();
 
         var sentinelAge = _age.Encrypt(VaultMetadataStore.SentinelPlaintext, master);

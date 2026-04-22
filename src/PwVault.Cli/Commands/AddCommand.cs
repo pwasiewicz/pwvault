@@ -98,7 +98,7 @@ public sealed class AddCommand : Command<AddCommand.Settings>
         if (_config.AutoCommit)
             GitRunner.AutoCommitIfRepo(vaultPath, $"pwvault: add {entryPath.Value}", _config.AutoPush);
 
-        AnsiConsole.MarkupLine($"[green]Added entry:[/] {entryPath.Value}");
+        AnsiConsole.MarkupLine($"[green]Added entry:[/] {Markup.Escape(entryPath.Value)}");
         return 0;
     }
 

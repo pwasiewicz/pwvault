@@ -25,6 +25,6 @@ public static class InteractiveEntryPicker
                 .MoreChoicesText("[dim](↑/↓ to scroll)[/]")
                 .EnableSearch()
                 .AddChoices(entries)
-                .UseConverter(e => EntryFormatter.ForPicker(e.Entry)));
+                .UseConverter(e => Markup.Escape(EntryFormatter.ForPicker(e.Entry))));
     }
 }

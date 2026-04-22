@@ -69,8 +69,10 @@ public sealed class SearchCommand : Command<SearchCommand.Settings>
     private static string DescribeFilter(Settings settings)
     {
         var parts = new List<string>();
-        if (!string.IsNullOrWhiteSpace(settings.Query)) parts.Add($"query '{settings.Query}'");
-        if (settings.Tags is { Length: > 0 }) parts.Add($"tags [{string.Join(", ", settings.Tags)}]");
+        if (!string.IsNullOrWhiteSpace(settings.Query))
+            parts.Add($"query '{Markup.Escape(settings.Query)}'");
+        if (settings.Tags is { Length: > 0 })
+            parts.Add(Markup.Escape($"tags [{string.Join(", ", settings.Tags)}]"));
         return parts.Count == 0 ? "" : " for " + string.Join(" + ", parts);
     }
 }

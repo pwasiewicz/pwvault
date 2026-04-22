@@ -50,7 +50,7 @@ public sealed class RmCommand : Command<RmCommand.Settings>
         if (_config.AutoCommit)
             GitRunner.AutoCommitIfRepo(vaultPath, $"pwvault: remove {entryPath.Value}", _config.AutoPush);
 
-        AnsiConsole.MarkupLine($"[green]Removed:[/] {entryPath.Value}");
+        AnsiConsole.MarkupLine($"[green]Removed:[/] {Markup.Escape(entryPath.Value)}");
         return 0;
     }
 }
