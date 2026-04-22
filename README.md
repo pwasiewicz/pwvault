@@ -42,10 +42,8 @@ Wymaga .NET 10 SDK. `age` binary nie jest wymagane do działania (mamy natywną 
 ## Quickstart
 
 ```bash
-# Ustaw ścieżkę vaulta raz (albo przekazuj --vault <path> przy każdej komendzie)
-export PWVAULT_PATH=~/vault
-
-# 1. Inicjalizacja — tworzy katalog, .vault.json z sentinelem, README/FORMAT/recover.sh, git init
+# 1. Inicjalizacja — tworzy katalog, .vault.json z sentinelem, README/FORMAT/recover.sh, git init,
+#    i automatycznie zapisuje vault_path w ~/.config/pwvault/config.json
 pwvault init ~/vault
 
 # 2. Odblokuj sesję (master cache'owany 1h, sliding extend)
@@ -206,7 +204,20 @@ Działa na dowolnej maszynie z `age` (apt/brew/winget/scoop/GitHub releases) i `
 
 ## Konfiguracja
 
-`~/.config/pwvault/config.json`:
+`pwvault init` zapisuje `vault_path` automatycznie. Do dalszej edycji:
+
+```bash
+pwvault config                     # tabela z aktualnymi wartościami i źródłami (file/default/PWVAULT_PATH)
+pwvault config path                # ścieżka pliku configu (do pipe'owania w edytor)
+pwvault config set vault_path ~/another-vault
+pwvault config set clipboard_clear_seconds 30
+pwvault config set auto_push true
+$EDITOR $(pwvault config path)     # edycja ręczna, config.json to zwykły JSON
+```
+
+Lokalizacja pliku: `~/.config/pwvault/config.json` (Linux), `$XDG_CONFIG_HOME/pwvault/config.json` jeśli ustawione, `%APPDATA%\pwvault\config.json` (Windows).
+
+Pełna lista kluczy i domyślnych wartości:
 
 ```json
 {
@@ -220,7 +231,9 @@ Działa na dowolnej maszynie z `age` (apt/brew/winget/scoop/GitHub releases) i `
 }
 ```
 
-Override przez env: `PWVAULT_PATH`, flaga `--vault <path>` na każdej komendzie.
+**Precedencja (od najwyższej):** flaga `--vault <path>` na komendzie → `PWVAULT_PATH` env → `config.json` → default. Pozostałe klucze — tylko z configu albo defaulty.
+
+**Wiele vaultów:** pierwszy `init` ustawia default. Drugi `init` pyta czy przełączyć default (`-y` = tak, `--no-save-config` = nie dotykaj configu). Z wielu vaultów po prostu używasz `pwvault --vault ~/other-vault <command>`.
 
 ## Scope
 

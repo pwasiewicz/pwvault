@@ -30,6 +30,10 @@ public sealed class InitCommand : Command<InitCommand.Settings>
         [CommandOption("--no-git")]
         [Description("Skip git init and initial commit.")]
         public bool NoGit { get; init; }
+
+        [CommandOption("--no-save-config")]
+        [Description("Skip writing vault_path to config.json.")]
+        public bool NoSaveConfig { get; init; }
     }
 
     protected override int Execute(CommandContext context, Settings settings, CancellationToken cancellationToken)
@@ -70,8 +74,41 @@ public sealed class InitCommand : Command<InitCommand.Settings>
 
         AnsiConsole.MarkupLine($"[green]Vault initialized.[/]");
         AnsiConsole.MarkupLine("[yellow]Remember your master password — it cannot be recovered.[/]");
+
+        if (!settings.NoSaveConfig)
+            PersistVaultPath(path, settings.SkipConfirmations);
+
         AnsiConsole.MarkupLine($"[dim]Use 'pwvault add <path>' to create your first entry.[/]");
         return 0;
+    }
+
+    private static void PersistVaultPath(string vaultPath, bool assumeYes)
+    {
+        var existing = ConfigLoader.LoadFromFile() ?? new PwVaultConfig();
+
+        if (string.IsNullOrWhiteSpace(existing.VaultPath))
+        {
+            existing.VaultPath = vaultPath;
+            ConfigLoader.Save(existing);
+            AnsiConsole.MarkupLine($"[dim]Saved as default vault in {Markup.Escape(ConfigLoader.GetConfigPath())}[/]");
+            return;
+        }
+
+        if (existing.VaultPath == vaultPath) return;
+
+        var setAsDefault = assumeYes || AnsiConsole.Confirm(
+            $"Current default vault is [yellow]{Markup.Escape(existing.VaultPath)}[/]. Set [cyan]{Markup.Escape(vaultPath)}[/] as default?",
+            defaultValue: false);
+
+        if (!setAsDefault)
+        {
+            AnsiConsole.MarkupLine($"[dim]Keeping default vault unchanged. Pass --vault {Markup.Escape(vaultPath)} to use the new one, or run 'pwvault config set vault_path {Markup.Escape(vaultPath)}'.[/]");
+            return;
+        }
+
+        existing.VaultPath = vaultPath;
+        ConfigLoader.Save(existing);
+        AnsiConsole.MarkupLine("[dim]Default vault updated.[/]");
     }
 
     private static void WriteHelperFiles(string vaultRoot)
