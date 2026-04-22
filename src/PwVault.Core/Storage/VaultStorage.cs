@@ -46,7 +46,7 @@ public sealed class VaultStorage : IVaultStorage
             timeProvider ?? TimeProvider.System);
     }
 
-    public IReadOnlyList<StoredEntry> List(EntryPath? underPath = null)
+    public IReadOnlyList<StoredEntry> List(EntryPath? underPath = null, IReadOnlyList<string>? tags = null)
     {
         EnsureNotDisposed();
         var directory = underPath is null
@@ -56,14 +56,27 @@ public sealed class VaultStorage : IVaultStorage
         if (!_fs.DirectoryExists(directory))
             return [];
 
+        var filter = TagNormalizer.Normalize(tags);
         var result = new List<StoredEntry>();
         foreach (var file in _fs.EnumerateFiles(directory, $"*{EntryFileExtension}", recursive: true))
         {
             if (IsReservedFile(file)) continue;
             var stored = LoadEntryFromFile(file);
-            if (stored is not null) result.Add(stored);
+            if (stored is null) continue;
+            if (!MatchesAllTags(stored.Entry, filter)) continue;
+            result.Add(stored);
         }
         return result;
+    }
+
+    private static bool MatchesAllTags(VaultEntry entry, IReadOnlyList<string> requiredTags)
+    {
+        if (requiredTags.Count == 0) return true;
+        foreach (var required in requiredTags)
+        {
+            if (!entry.Tags.Contains(required, StringComparer.Ordinal)) return false;
+        }
+        return true;
     }
 
     private static bool IsReservedFile(string fullPath) =>
@@ -120,18 +133,38 @@ public sealed class VaultStorage : IVaultStorage
         _fs.DeleteFile(file);
     }
 
-    public IReadOnlyList<StoredEntry> Search(string query, int maxResults = 20)
+    public IReadOnlyList<StoredEntry> Search(string query, int maxResults = 20, IReadOnlyList<string>? tags = null)
     {
         EnsureNotDisposed();
+        var candidates = List(tags: tags);
         if (string.IsNullOrWhiteSpace(query))
-            return List();
+            return candidates;
 
-        return List()
+        return candidates
             .Select(stored => (stored, score: ScoreEntry(stored.Entry, query)))
             .Where(x => x.score >= FuzzyScoreThreshold)
             .OrderByDescending(x => x.score)
             .Take(maxResults)
             .Select(x => x.stored)
+            .ToList();
+    }
+
+    public IReadOnlyList<TagCount> ListTags()
+    {
+        EnsureNotDisposed();
+        var counts = new Dictionary<string, int>(StringComparer.Ordinal);
+        foreach (var stored in List())
+        {
+            foreach (var tag in stored.Entry.Tags)
+            {
+                counts[tag] = counts.TryGetValue(tag, out var c) ? c + 1 : 1;
+            }
+        }
+
+        return counts
+            .Select(kv => new TagCount(kv.Key, kv.Value))
+            .OrderByDescending(t => t.Count)
+            .ThenBy(t => t.Tag, StringComparer.Ordinal)
             .ToList();
     }
 
@@ -208,6 +241,7 @@ public sealed class VaultStorage : IVaultStorage
         && a.Url == b.Url
         && a.PasswordEncrypted == b.PasswordEncrypted
         && a.NotesEncrypted == b.NotesEncrypted
+        && a.Tags.SequenceEqual(b.Tags, StringComparer.Ordinal)
         && a.Created == b.Created
         && a.Updated == b.Updated;
 

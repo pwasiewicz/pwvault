@@ -6,7 +6,7 @@ public interface IVaultStorage : IDisposable
 {
     string RootPath { get; }
 
-    IReadOnlyList<StoredEntry> List(EntryPath? underPath = null);
+    IReadOnlyList<StoredEntry> List(EntryPath? underPath = null, IReadOnlyList<string>? tags = null);
 
     StoredEntry? TryGet(EntryPath path);
 
@@ -18,5 +18,9 @@ public interface IVaultStorage : IDisposable
 
     void Remove(EntryPath path);
 
-    IReadOnlyList<StoredEntry> Search(string query, int maxResults = 20);
+    IReadOnlyList<StoredEntry> Search(string query, int maxResults = 20, IReadOnlyList<string>? tags = null);
+
+    IReadOnlyList<TagCount> ListTags();
 }
+
+public readonly record struct TagCount(string Tag, int Count);

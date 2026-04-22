@@ -37,6 +37,7 @@ app.Configure(c =>
     c.AddCommand<LsCommand>("ls").WithDescription("List entries as a tree.");
     c.AddCommand<RmCommand>("rm").WithDescription("Remove an entry.");
     c.AddCommand<SearchCommand>("search").WithDescription("Fuzzy search across plaintext metadata.");
+    c.AddCommand<TagsCommand>("tags").WithDescription("List all tags in use with entry counts.");
     c.AddCommand<GenCommand>("gen").WithDescription("Generate a random password.");
 });
 

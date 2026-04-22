@@ -28,6 +28,10 @@ public sealed class LsCommand : Command<LsCommand.Settings>
         [CommandOption("--flat")]
         [Description("Print as flat list instead of tree.")]
         public bool Flat { get; init; }
+
+        [CommandOption("--tag <TAG>")]
+        [Description("Only include entries tagged with this value. May be repeated (AND semantics).")]
+        public string[]? Tags { get; init; }
     }
 
     protected override int Execute(CommandContext context, Settings settings, CancellationToken cancellationToken)
@@ -36,7 +40,7 @@ public sealed class LsCommand : Command<LsCommand.Settings>
         using var storage = VaultStorage.Open(vaultPath, _fs);
 
         EntryPath? under = string.IsNullOrWhiteSpace(settings.Path) ? null : new EntryPath(settings.Path);
-        var entries = storage.List(under).OrderBy(e => e.Entry.Path.Value).ToList();
+        var entries = storage.List(under, settings.Tags).OrderBy(e => e.Entry.Path.Value).ToList();
 
         if (entries.Count == 0)
         {

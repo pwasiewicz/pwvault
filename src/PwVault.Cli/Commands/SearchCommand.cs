@@ -20,29 +20,35 @@ public sealed class SearchCommand : Command<SearchCommand.Settings>
 
     public sealed class Settings : BaseCommandSettings
     {
-        [CommandArgument(0, "<query>")]
-        [Description("Fuzzy-matched against path, title, username, url.")]
-        public string Query { get; init; } = "";
+        [CommandArgument(0, "[query]")]
+        [Description("Fuzzy-matched against path, title, username, url. Optional when --tag is used.")]
+        public string? Query { get; init; }
 
         [CommandOption("-n|--max <N>")]
         public int? MaxResults { get; init; }
+
+        [CommandOption("--tag <TAG>")]
+        [Description("Only include entries tagged with this value. May be repeated (AND semantics).")]
+        public string[]? Tags { get; init; }
     }
 
     protected override int Execute(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
         var vaultPath = VaultPathResolver.Resolve(settings, _config);
         using var storage = VaultStorage.Open(vaultPath, _fs);
-        var results = storage.Search(settings.Query, settings.MaxResults ?? 20);
+        var results = storage.Search(settings.Query ?? "", settings.MaxResults ?? 20, settings.Tags);
 
         if (results.Count == 0)
         {
-            AnsiConsole.MarkupLine($"[dim]No matches for '{Markup.Escape(settings.Query)}'.[/]");
+            var descriptor = DescribeFilter(settings);
+            AnsiConsole.MarkupLine($"[dim]No matches{descriptor}.[/]");
             return 0;
         }
 
         var table = new Table().Border(TableBorder.Rounded);
         table.AddColumn("Path");
         table.AddColumn("Title");
+        table.AddColumn("Tags");
         table.AddColumn("Username");
         table.AddColumn("URL");
 
@@ -51,11 +57,20 @@ public sealed class SearchCommand : Command<SearchCommand.Settings>
             table.AddRow(
                 $"[green]{Markup.Escape(r.Entry.Path.Value)}[/]",
                 Markup.Escape(r.Entry.Title),
+                Markup.Escape(string.Join(", ", r.Entry.Tags)),
                 Markup.Escape(r.Entry.Username ?? ""),
                 Markup.Escape(r.Entry.Url ?? ""));
         }
 
         AnsiConsole.Write(table);
         return 0;
+    }
+
+    private static string DescribeFilter(Settings settings)
+    {
+        var parts = new List<string>();
+        if (!string.IsNullOrWhiteSpace(settings.Query)) parts.Add($"query '{settings.Query}'");
+        if (settings.Tags is { Length: > 0 }) parts.Add($"tags [{string.Join(", ", settings.Tags)}]");
+        return parts.Count == 0 ? "" : " for " + string.Join(" + ", parts);
     }
 }

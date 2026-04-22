@@ -221,4 +221,132 @@ public sealed class VaultStorageTests : IDisposable
         Assert.Contains("\"notes_age\"", json);
         Assert.Contains("\"title\"", json);
     }
+
+    [Fact]
+    public void Tags_roundtrip_normalized_and_sorted()
+    {
+        using var storage = NewStorage();
+        var entry = SampleEntry("banking/mbank") with { Tags = new[] { "Banking", "money", "banking" } };
+        storage.Add(entry);
+
+        var fetched = storage.Get(new EntryPath("banking/mbank"));
+
+        Assert.Equal(new[] { "banking", "money" }, fetched.Entry.Tags);
+    }
+
+    [Fact]
+    public void Tags_empty_not_written_to_json()
+    {
+        using var storage = NewStorage();
+        storage.Add(SampleEntry("misc/thing"));
+
+        var file = Path.Combine(_tempRoot, "misc", "thing.json");
+        var json = File.ReadAllText(file);
+
+        Assert.DoesNotContain("\"tags\"", json);
+    }
+
+    [Fact]
+    public void Tags_non_empty_written_as_json_array()
+    {
+        using var storage = NewStorage();
+        var entry = SampleEntry("banking/mbank") with { Tags = new[] { "money", "2fa" } };
+        storage.Add(entry);
+
+        var file = Path.Combine(_tempRoot, "banking", "mbank.json");
+        var json = File.ReadAllText(file);
+
+        Assert.Contains("\"tags\"", json);
+        Assert.Contains("\"2fa\"", json);
+        Assert.Contains("\"money\"", json);
+    }
+
+    [Fact]
+    public void List_filters_by_tag()
+    {
+        using var storage = NewStorage();
+        storage.Add(SampleEntry("banking/mbank") with { Tags = new[] { "money", "2fa" } });
+        storage.Add(SampleEntry("dev/github") with { Tags = new[] { "work" } });
+        storage.Add(SampleEntry("dev/aws") with { Tags = new[] { "work", "2fa" } });
+
+        var twofa = storage.List(tags: new[] { "2fa" });
+        Assert.Equal(2, twofa.Count);
+        Assert.Contains(twofa, e => e.Entry.Path.Value == "banking/mbank");
+        Assert.Contains(twofa, e => e.Entry.Path.Value == "dev/aws");
+    }
+
+    [Fact]
+    public void List_filters_by_multiple_tags_with_AND()
+    {
+        using var storage = NewStorage();
+        storage.Add(SampleEntry("a") with { Tags = new[] { "work", "2fa" } });
+        storage.Add(SampleEntry("b") with { Tags = new[] { "work" } });
+        storage.Add(SampleEntry("c") with { Tags = new[] { "2fa" } });
+
+        var matches = storage.List(tags: new[] { "work", "2fa" });
+
+        Assert.Single(matches);
+        Assert.Equal("a", matches[0].Entry.Path.Value);
+    }
+
+    [Fact]
+    public void List_with_tag_filter_normalizes_input()
+    {
+        using var storage = NewStorage();
+        storage.Add(SampleEntry("x") with { Tags = new[] { "Work" } });
+
+        var matches = storage.List(tags: new[] { "WORK" });
+        Assert.Single(matches);
+    }
+
+    [Fact]
+    public void Search_combines_fuzzy_query_with_tag_filter()
+    {
+        using var storage = NewStorage();
+        storage.Add(SampleEntry("banking/mbank", title: "mBank Poland") with { Tags = new[] { "money" } });
+        storage.Add(SampleEntry("dev/github", title: "mBank Mock") with { Tags = new[] { "work" } });
+
+        var results = storage.Search("mbank", tags: new[] { "money" });
+
+        Assert.Single(results);
+        Assert.Equal("banking/mbank", results[0].Entry.Path.Value);
+    }
+
+    [Fact]
+    public void Search_empty_query_with_tag_filter_returns_matching_entries()
+    {
+        using var storage = NewStorage();
+        storage.Add(SampleEntry("a") with { Tags = new[] { "work" } });
+        storage.Add(SampleEntry("b") with { Tags = new[] { "home" } });
+
+        var results = storage.Search("", tags: new[] { "work" });
+
+        Assert.Single(results);
+    }
+
+    [Fact]
+    public void ListTags_aggregates_counts_sorted_by_count_desc()
+    {
+        using var storage = NewStorage();
+        storage.Add(SampleEntry("a") with { Tags = new[] { "work", "2fa" } });
+        storage.Add(SampleEntry("b") with { Tags = new[] { "work" } });
+        storage.Add(SampleEntry("c") with { Tags = new[] { "work", "2fa" } });
+
+        var tags = storage.ListTags();
+
+        Assert.Equal(2, tags.Count);
+        Assert.Equal("work", tags[0].Tag);
+        Assert.Equal(3, tags[0].Count);
+        Assert.Equal("2fa", tags[1].Tag);
+        Assert.Equal(2, tags[1].Count);
+    }
+
+    [Fact]
+    public void ListTags_empty_when_no_entries_tagged()
+    {
+        using var storage = NewStorage();
+        storage.Add(SampleEntry("a"));
+
+        Assert.Empty(storage.ListTags());
+    }
 }

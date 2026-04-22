@@ -4,7 +4,7 @@ namespace PwVault.Core.Storage;
 
 internal static class EntryMapper
 {
-    public static VaultEntry ToDomain(EntryFileModel model, EntryPath path) => new(
+    public static VaultEntry ToDomain(EntryFileModel model, EntryPath path) => new VaultEntry(
         Path: path,
         Title: model.Title,
         Username: string.IsNullOrEmpty(model.Username) ? null : model.Username,
@@ -14,7 +14,10 @@ internal static class EntryMapper
             ? null
             : new EncryptedField(model.NotesAge),
         Created: model.Created,
-        Updated: model.Updated);
+        Updated: model.Updated)
+    {
+        Tags = model.Tags ?? (IReadOnlyList<string>)Array.Empty<string>(),
+    };
 
     public static EntryFileModel ToFile(VaultEntry entry) => new()
     {
@@ -24,6 +27,7 @@ internal static class EntryMapper
         Url = entry.Url,
         PasswordAge = entry.PasswordEncrypted.AsciiArmor,
         NotesAge = entry.NotesEncrypted?.AsciiArmor,
+        Tags = entry.Tags.Count == 0 ? null : entry.Tags.ToList(),
         Created = entry.Created,
         Updated = entry.Updated,
     };

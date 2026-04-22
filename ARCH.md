@@ -41,18 +41,21 @@ Jeden plik JSON per wpis. Lokalizacja: `{vault_root}/{entry_path}.json`. `entry_
   "url": "https://mbank.pl",
   "password_age": "-----BEGIN AGE ENCRYPTED FILE-----\n...\n-----END AGE ENCRYPTED FILE-----",
   "notes_age": "-----BEGIN AGE ENCRYPTED FILE-----\n...\n-----END AGE ENCRYPTED FILE-----",
+  "tags": ["2fa", "banking"],
   "created": "2026-04-22T10:30:00.0000000+00:00",
   "updated": "2026-04-22T10:30:00.0000000+00:00"
 }
 ```
 
-**Plaintext fields (świadomy trade-off):** `schema_version`, `title`, `username`, `url`, `created`, `updated`. Git log per-wpis ujawnia historię zmian. Akceptowane — nikt nie robi targeted reverse engineering osobistego vaulta.
+**Plaintext fields (świadomy trade-off):** `schema_version`, `title`, `username`, `url`, `tags`, `created`, `updated`. Git log per-wpis ujawnia historię zmian. Akceptowane — nikt nie robi targeted reverse engineering osobistego vaulta.
 
 **Zaszyfrowane fields (zawsze ASCII-armored age):**
 - `password_age` — właściwe hasło (wymagane, zawsze obecne)
 - `notes_age` — notatki (opcjonalne, ale **gdy są, to zawsze szyfrowane**; tu lądują security answers, recovery codes, PINy)
 
-**Nullability:** `username`, `url`, `notes_age` mogą być `null` / nieobecne. `title` i `password_age` są wymagane. `schema_version`, `created`, `updated` wypełniane przez storage.
+**Nullability:** `username`, `url`, `notes_age`, `tags` mogą być `null` / nieobecne. `title` i `password_age` są wymagane. `schema_version`, `created`, `updated` wypełniane przez storage.
+
+**Tagi (`tags: string[]`, opcjonalne):** plaintext labels do filtrowania/grupowania (`2fa`, `banking`, `work`). Normalizowane przy zapisie w `TagNormalizer`: `Trim()`, `ToLowerInvariant()`, dedup, sort ordinal, walidacja (max 50 znaków, bez `/`, bez whitespace, bez znaków kontrolnych). Sort jest deterministyczny — minimalizuje szum w git diff. Puste (`[]`) → pole omijane przy serializacji. Brak bump `schema_version` — pole dodane jako opcjonalne, stare wpisy czytalne bez migracji.
 
 **Ścieżka logiczna (`EntryPath`):** forward-slash separated, bez wiodącego/końcowego `/`, bez `..`, bez znaków kontrolnych. Przykłady: `banking/mbank`, `dev/github`, `gmail`.
 
@@ -275,8 +278,10 @@ interface IAgeGateway {
 - [x] `pwvault get <path> [-c|--show|--notes]` — deszyfruje, default clipboard z auto-clear, `--show` stdout
 - [x] `pwvault ls [path] [--flat]` — drzewo wpisów
 - [x] `pwvault rm <path> [-y]` — usuń wpis (confirm prompt, bypass `-y`), auto-commit
-- [x] `pwvault search <query>` — fuzzy po plaintext metadata (FuzzySharp)
+- [x] `pwvault search <query> [--tag T]` — fuzzy po plaintext metadata (FuzzySharp), z opcjonalnym filtrem po tagach (AND)
 - [x] `pwvault gen [length] [--no-symbols] [-c]` — generator haseł (CSPRNG)
+- [x] `pwvault tags` — lista tagów w użyciu z licznikami
+- [x] Tagi — `--tag <name>` (repeatable) w `add`, `ls`, `search`; normalizacja kanoniczna w `TagNormalizer`
 - [x] Auto-commit po każdej mutacji (konfigurowalne; auto-push opcjonalne)
 
 **Weryfikacja master:** `.vault.json` z encrypted sentinel (stały plaintext `pwvault-sentinel-v1` zaszyfrowany master passwordem). Weryfikacja przed każdym write — zapobiega zapisom z typo w master password, które byłyby potem nieodzyskiwalne.

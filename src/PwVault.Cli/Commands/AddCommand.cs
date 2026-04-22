@@ -49,6 +49,10 @@ public sealed class AddCommand : Command<AddCommand.Settings>
         [CommandOption("--length <N>")]
         [Description("Length of generated password (default from config).")]
         public int? Length { get; init; }
+
+        [CommandOption("--tag <TAG>")]
+        [Description("Tag (normalized to lowercase). May be repeated.")]
+        public string[]? Tags { get; init; }
     }
 
     protected override int Execute(CommandContext context, Settings settings, CancellationToken cancellationToken)
@@ -84,7 +88,10 @@ public sealed class AddCommand : Command<AddCommand.Settings>
             Username: string.IsNullOrWhiteSpace(username) ? null : username,
             Url: string.IsNullOrWhiteSpace(url) ? null : url,
             PasswordEncrypted: passwordAge,
-            NotesEncrypted: notesAge);
+            NotesEncrypted: notesAge)
+        {
+            Tags = settings.Tags ?? Array.Empty<string>(),
+        };
 
         storage.Add(entry);
 
