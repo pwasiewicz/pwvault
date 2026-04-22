@@ -6,12 +6,35 @@ Architektura i threat model: zobacz [ARCH.md](./ARCH.md).
 
 ## Instalacja
 
+### Self-contained binarka (zalecane)
+
+Jeden plik ~78 MB ze wszystkim (runtime .NET + libsodium + kod), działa bez zainstalowanego .NET:
+
 ```bash
 git clone <repo-url> pw-vault
 cd pw-vault
+./install.sh                    # → ~/.local/bin/pwvault (bez sudo)
+./install.sh --system           # → /usr/local/bin/pwvault (sudo, system-wide)
+./install.sh --prefix /opt/bin  # → /opt/bin/pwvault (custom)
+./install.sh --build-only       # tylko build do ./artifacts, bez instalacji
+```
+
+Skrypt wywołuje `dotnet publish` (wymaga SDK na maszynie buildującej), produkuje single-file binary i kopiuje pod nazwą `pwvault`. Runtime auto-detect: linux-x64 / osx-x64 / osx-arm64.
+
+**Upgrade:** po `git pull` po prostu odpal `./install.sh` ponownie — nadpisze poprzednią wersję.
+
+**PATH:** `~/.local/bin` jest w PATH w większości nowoczesnych dystrybucji (Debian/Ubuntu od `~/.profile`). Jeśli `which pwvault` po instalacji nic nie zwraca:
+
+```bash
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
+source ~/.bashrc
+```
+
+### Dev mode (bez publishu)
+
+```bash
 dotnet build -c Release
-# binarka: src/PwVault.Cli/bin/Release/net10.0/PwVault.Cli
-# wygodnie: alias pwvault='dotnet run --project src/PwVault.Cli --'
+alias pwvault='dotnet run --project src/PwVault.Cli --'
 ```
 
 Wymaga .NET 10 SDK. `age` binary nie jest wymagane do działania (mamy natywną implementację v1), ale przyda się do emergency recovery.
