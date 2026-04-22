@@ -2,6 +2,7 @@
   <Folder Name="/src/">
     <Project Path="src/PwVault.Cli/PwVault.Cli.csproj" />
     <Project Path="src/PwVault.Core/PwVault.Core.csproj" />
+    <Project Path="src/PwVault.Web/PwVault.Web.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/PwVault.Core.Tests/PwVault.Core.Tests.csproj" />

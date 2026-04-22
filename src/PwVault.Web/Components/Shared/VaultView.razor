@@ -1,0 +1,149 @@
+@inject VaultSession Session
+@inject VaultAccess Access
+@inject IJSRuntime JS
+
+<div class="vault-shell">
+    <header class="topbar">
+        <div class="brand">
+            <span class="prompt">$</span>
+            <span>pwvault.web</span>
+            <span class="path-hint">— @Access.VaultPath</span>
+        </div>
+        <div class="topbar-right">
+            <span class="count">@_entries.Count entries</span>
+            <button class="btn-ghost" @onclick="Lock">lock &times;</button>
+        </div>
+    </header>
+
+    <div class="search-row">
+        <span class="chevron">&gt;</span>
+        <input type="text"
+               class="search-input"
+               placeholder="search path / title / username / tag"
+               @bind="_query"
+               @bind:event="oninput"
+               autofocus />
+        @if (!string.IsNullOrEmpty(_query))
+        {
+            <button class="btn-ghost" @onclick="ClearSearch">clear</button>
+        }
+    </div>
+
+    <div class="content">
+        <aside class="tree-pane">
+            @if (_filtered.Count == 0)
+            {
+                <div class="empty">
+                    @if (_entries.Count == 0)
+                    {
+                        <span>No entries in vault.</span>
+                    }
+                    else
+                    {
+                        <span>No matches for "@_query".</span>
+                    }
+                </div>
+            }
+            else
+            {
+                <TreeRender Entries="_filtered" Selected="_selected" OnSelect="Select" />
+            }
+        </aside>
+
+        <section class="detail-pane">
+            @if (_selected is null)
+            {
+                <div class="empty">
+                    <div class="ascii-hint">
+                        <pre>
+  ┌─ select an entry ──┐
+  │                    │
+  │  click on the left │
+  │                    │
+  └────────────────────┘
+</pre>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <EntryDetail Entry="_selected.Entry"
+                             Master="@Session.Master"
+                             Access="Access"
+                             JS="JS" />
+            }
+        </section>
+    </div>
+
+    @if (_toast is not null)
+    {
+        <div class="toast @(_toast.IsError ? "toast-error" : "toast-ok")">@_toast.Message</div>
+    }
+</div>
+
+@code {
+    private IReadOnlyList<StoredEntry> _entries = Array.Empty<StoredEntry>();
+    private List<StoredEntry> _filtered = new();
+    private StoredEntry? _selected;
+    private string _query = "";
+    private ToastMsg? _toast;
+
+    protected override void OnInitialized()
+    {
+        try
+        {
+            _entries = Access.ListEntries();
+        }
+        catch (Exception ex)
+        {
+            _entries = Array.Empty<StoredEntry>();
+            _toast = new ToastMsg($"Failed to load entries: {ex.Message}", IsError: true);
+        }
+        ApplyFilter();
+    }
+
+    protected override bool ShouldRender()
+    {
+        ApplyFilter();
+        return true;
+    }
+
+    private void ApplyFilter()
+    {
+        if (string.IsNullOrWhiteSpace(_query))
+        {
+            _filtered = _entries.ToList();
+            return;
+        }
+
+        var needle = _query.Trim();
+        _filtered = _entries.Where(e => Matches(e.Entry, needle)).ToList();
+    }
+
+    private static bool Matches(VaultEntry e, string needle)
+    {
+        if (Contains(e.Path.Value, needle)) return true;
+        if (Contains(e.Title, needle)) return true;
+        if (e.Username is not null && Contains(e.Username, needle)) return true;
+        foreach (var tag in e.Tags)
+            if (Contains(tag, needle)) return true;
+        return false;
+    }
+
+    private static bool Contains(string haystack, string needle) =>
+        haystack.Contains(needle, StringComparison.OrdinalIgnoreCase);
+
+    private void Select(StoredEntry stored)
+    {
+        _selected = stored;
+    }
+
+    private void ClearSearch() => _query = "";
+
+    private void Lock()
+    {
+        Session.Lock();
+    }
+
+    private sealed record ToastMsg(string Message, bool IsError);
+}

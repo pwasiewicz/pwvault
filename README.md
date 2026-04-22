@@ -235,6 +235,27 @@ Pełna lista kluczy i domyślnych wartości:
 
 **Wiele vaultów:** pierwszy `init` ustawia default. Drugi `init` pyta czy przełączyć default (`-y` = tak, `--no-save-config` = nie dotykaj configu). Z wielu vaultów po prostu używasz `pwvault --vault ~/other-vault <command>`.
 
+## Web UI (read-only MVP)
+
+Lekki Blazor Server w `src/PwVault.Web` — ciemny motyw w stylu terminala, ASCII-tree, substring search po path/title/username/tagach, copy-to-clipboard. Master password trzymany w pamięci per-circuit (refresh / zamknięcie zakładki = lock).
+
+```bash
+# Skonfiguruj vault_path w appsettings.json (albo appsettings.Development.json):
+#   "PwVault": { "VaultPath": "/home/you/vault" }
+
+dotnet run --project src/PwVault.Web
+# → http://localhost:5000 (lub port przypisany przez Kestrel)
+# → login → master password → /vault
+```
+
+**Ograniczenia MVP (świadomie):**
+- Tylko odczyt (add/edit/rm nadal przez CLI)
+- Zero auth — tylko localhost. Dla self-hosted: Tailscale / reverse proxy / basic auth.
+- Brak auto-lock (cyrkuł Blazora disconnectuje sam po paru minutach → master GC'owany)
+- Nie robi `git pull` — patrzy na lokalny stan repo
+
+Architektura i roadmapa: [ARCH.md](./ARCH.md), sekcja **Iteracja 3 (web)**.
+
 ## Scope
 
 Świadomie wąski: CLI-first, git jako sync, brak OTP/autofill/mobile/browser extension/sharing. Pełna lista trade-offów: [ARCH.md](./ARCH.md).

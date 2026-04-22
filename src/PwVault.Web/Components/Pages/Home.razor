@@ -1,0 +1,14 @@
+@page "/"
+@rendermode InteractiveServer
+@inject VaultSession Session
+
+<PageTitle>pwvault</PageTitle>
+
+@if (Session.IsUnlocked)
+{
+    <VaultView />
+}
+else
+{
+    <LoginView />
+}

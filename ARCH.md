@@ -302,10 +302,13 @@ interface IAgeGateway {
 
 ### Iteracja 3 (web)
 
-- [ ] Lekki web UI (ASP.NET Minimal API + HTML)
-- [ ] Czyta z lokalnego klona repo (pull on demand)
-- [ ] Deszyfracja po stronie serwera (prompt o master password, trzymanie w pamięci sesji)
-- [ ] Self-hosted, tylko dla siebie (basic auth albo za Tailscale)
+- [x] **Blazor Server MVP (read-only)** — ASP.NET Blazor Server (net10), projekt `src/PwVault.Web`. Login screen (sentinel check) → pełnoekranowy widok: search bar + ASCII-tree + detail panel. Copy-to-clipboard via `navigator.clipboard.writeText` przez IJSRuntime. Ciemny motyw w stylistyce terminala (monospace, zielone akcenty, bez CSS frameworka).
+- [x] Config przez `appsettings.json` (klucz `PwVault.VaultPath`) — read-only z dysku, bez `git pull`
+- [x] Master trzymany w **scoped** `VaultSession` (per-circuit, ginie na refresh / disconnect). Brak sliding TTL — dyskonekt cyrkułu dociera w ciągu paru minut.
+- [ ] `git pull` on demand (teraz patrzy na lokalny klon bez auto-sync)
+- [ ] Auto-lock po N minutach bezczynności
+- [ ] Self-hosted z auth warstwą (basic auth / Tailscale / reverse proxy) — teraz tylko localhost
+- [ ] Write ops (add/edit/rm) — teraz tylko odczyt
 
 ### Explicitly nie robimy
 

@@ -1,0 +1,49 @@
+@{
+    var connector = IsLast ? "└── " : "├── ";
+    var childPrefix = Prefix + (IsLast ? "    " : "│   ");
+}
+
+<li class="@(Node.IsLeaf ? "tree-leaf" : "tree-group")">
+    @if (Node.IsLeaf)
+    {
+        var entry = Node.Leaf!;
+        var isSelected = Selected is not null && Selected.Entry.Path.Value == entry.Entry.Path.Value;
+        <button type="button"
+                class="tree-row tree-row-leaf @(isSelected ? "selected" : "")"
+                @onclick="() => OnSelect.InvokeAsync(entry)">
+            <span class="prefix">@Prefix@connector</span>
+            <span class="leaf-name">@Node.Label</span>
+            <span class="leaf-title"> — @entry.Entry.Title</span>
+            @if (entry.Entry.Tags.Count > 0)
+            {
+                <span class="leaf-tags"> [@string.Join(", ", entry.Entry.Tags)]</span>
+            }
+        </button>
+    }
+    else
+    {
+        <div class="tree-row tree-row-group">
+            <span class="prefix">@Prefix@connector</span>
+            <span class="folder">@Node.Label/</span>
+        </div>
+        @if (Node.Children.Count > 0)
+        {
+            <ul class="tree-children">
+                @for (var i = 0; i < Node.Children.Count; i++)
+                {
+                    var child = Node.Children[i];
+                    var childIsLast = i == Node.Children.Count - 1;
+                    <TreeBranch Node="child" Prefix="childPrefix" IsLast="childIsLast" Selected="Selected" OnSelect="OnSelect" />
+                }
+            </ul>
+        }
+    }
+</li>
+
+@code {
+    [Parameter, EditorRequired] public TreeNode Node { get; set; } = null!;
+    [Parameter] public string Prefix { get; set; } = "";
+    [Parameter] public bool IsLast { get; set; }
+    [Parameter] public StoredEntry? Selected { get; set; }
+    [Parameter, EditorRequired] public EventCallback<StoredEntry> OnSelect { get; set; }
+}

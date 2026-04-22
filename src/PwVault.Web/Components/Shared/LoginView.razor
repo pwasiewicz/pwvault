@@ -1,0 +1,63 @@
+@inject VaultSession Session
+@inject VaultAccess Access
+
+<div class="login-wrap">
+    <div class="login-box">
+        <div class="prompt-line">
+            <span class="prompt">$</span>
+            <span class="prompt-cmd">pwvault unlock</span>
+            <span class="prompt-path">(@Access.VaultPath)</span>
+        </div>
+
+        <div class="hint">Enter master password to decrypt the sentinel.</div>
+
+        <form @onsubmit="OnSubmitAsync" @onsubmit:preventDefault="true">
+            <div class="input-row">
+                <span class="chevron">&gt;</span>
+                <input type="password"
+                       class="master-input"
+                       placeholder="master password"
+                       autofocus
+                       autocomplete="current-password"
+                       @bind="_master"
+                       @bind:event="oninput" />
+            </div>
+
+            <button type="submit" class="btn-primary" disabled="@(_busy || string.IsNullOrEmpty(_master))">
+                @(_busy ? "decrypting..." : "unlock")
+            </button>
+
+            @if (!string.IsNullOrEmpty(_error))
+            {
+                <div class="error">@_error</div>
+            }
+        </form>
+    </div>
+</div>
+
+@code {
+    private string _master = "";
+    private string? _error;
+    private bool _busy;
+
+    private async Task OnSubmitAsync()
+    {
+        _busy = true;
+        _error = null;
+        StateHasChanged();
+
+        await Task.Yield();
+
+        if (Access.TryUnlock(_master, out var error))
+        {
+            Session.Unlock(_master);
+            _master = "";
+        }
+        else
+        {
+            _error = error;
+        }
+
+        _busy = false;
+    }
+}

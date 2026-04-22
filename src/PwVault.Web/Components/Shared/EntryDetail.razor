@@ -1,0 +1,156 @@
+@implements IDisposable
+
+<div class="entry-detail">
+    <div class="entry-header">
+        <span class="prompt">$</span>
+        <span class="entry-path">@Entry.Path.Value</span>
+    </div>
+
+    <div class="entry-title">@Entry.Title</div>
+
+    <dl class="metadata">
+        @if (!string.IsNullOrEmpty(Entry.Username))
+        {
+            <dt>username</dt>
+            <dd class="selectable">@Entry.Username</dd>
+        }
+        @if (!string.IsNullOrEmpty(Entry.Url))
+        {
+            <dt>url</dt>
+            <dd class="selectable"><a href="@Entry.Url" target="_blank" rel="noopener noreferrer">@Entry.Url</a></dd>
+        }
+        @if (Entry.Tags.Count > 0)
+        {
+            <dt>tags</dt>
+            <dd>
+                @foreach (var tag in Entry.Tags)
+                {
+                    <span class="tag">@tag</span>
+                }
+            </dd>
+        }
+        <dt>updated</dt>
+        <dd class="dim">@Entry.Updated.ToString("yyyy-MM-dd HH:mm")</dd>
+    </dl>
+
+    <div class="password-section">
+        <div class="section-label">password</div>
+        <div class="password-row">
+            <code class="password-display">@(_revealed ?? "•".PadRight(12, '•'))</code>
+            <div class="actions">
+                <button type="button" class="btn-primary" @onclick="CopyAsync" disabled="@_busy">
+                    @(_busy ? "..." : "copy")
+                </button>
+                <button type="button" class="btn-ghost" @onclick="ToggleRevealAsync">
+                    @(_revealed is null ? "show" : "hide")
+                </button>
+            </div>
+        </div>
+    </div>
+
+    @if (Entry.NotesEncrypted is not null)
+    {
+        <div class="notes-section">
+            <div class="section-label">notes</div>
+            @if (_notes is null)
+            {
+                <button type="button" class="btn-ghost" @onclick="LoadNotesAsync" disabled="@_busy">decrypt notes</button>
+            }
+            else
+            {
+                <pre class="notes-display">@_notes</pre>
+            }
+        </div>
+    }
+
+    @if (_error is not null)
+    {
+        <div class="error">@_error</div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public VaultEntry Entry { get; set; } = null!;
+    [Parameter, EditorRequired] public string Master { get; set; } = "";
+    [Parameter, EditorRequired] public VaultAccess Access { get; set; } = null!;
+    [Parameter, EditorRequired] public IJSRuntime JS { get; set; } = null!;
+
+    private string? _revealed;
+    private string? _notes;
+    private string? _error;
+    private bool _busy;
+    private VaultEntry? _lastEntry;
+
+    protected override void OnParametersSet()
+    {
+        if (!ReferenceEquals(_lastEntry, Entry))
+        {
+            _revealed = null;
+            _notes = null;
+            _error = null;
+            _lastEntry = Entry;
+        }
+    }
+
+    private async Task CopyAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var plain = await Task.Run(() => Access.DecryptPassword(Entry, Master));
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", plain);
+        }
+        catch (Exception ex)
+        {
+            _error = $"Copy failed: {ex.Message}";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task ToggleRevealAsync()
+    {
+        if (_revealed is not null)
+        {
+            _revealed = null;
+            return;
+        }
+        _busy = true;
+        _error = null;
+        try
+        {
+            _revealed = await Task.Run(() => Access.DecryptPassword(Entry, Master));
+        }
+        catch (Exception ex)
+        {
+            _error = $"Decrypt failed: {ex.Message}";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task LoadNotesAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            _notes = await Task.Run(() => Access.DecryptNotes(Entry, Master));
+        }
+        catch (Exception ex)
+        {
+            _error = $"Decrypt notes failed: {ex.Message}";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    public void Dispose() { }
+}

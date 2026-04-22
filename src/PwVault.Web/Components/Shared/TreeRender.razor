@@ -1,0 +1,24 @@
+@if (Root is not null)
+{
+    <ul class="tree-root">
+        @for (var i = 0; i < Root.Children.Count; i++)
+        {
+            var child = Root.Children[i];
+            var isLast = i == Root.Children.Count - 1;
+            <TreeBranch Node="child" Prefix="" IsLast="isLast" Selected="Selected" OnSelect="OnSelect" />
+        }
+    </ul>
+}
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<StoredEntry> Entries { get; set; } = Array.Empty<StoredEntry>();
+    [Parameter] public StoredEntry? Selected { get; set; }
+    [Parameter, EditorRequired] public EventCallback<StoredEntry> OnSelect { get; set; }
+
+    private TreeNode? Root;
+
+    protected override void OnParametersSet()
+    {
+        Root = TreeNode.BuildForest(Entries);
+    }
+}
