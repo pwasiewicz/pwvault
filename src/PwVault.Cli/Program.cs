@@ -37,15 +37,27 @@ app.Configure(c =>
     c.AddCommand<GetCommand>("get").WithDescription("Fetch an entry; default copies password to clipboard.");
     c.AddCommand<LsCommand>("ls").WithDescription("List entries as a tree.");
     c.AddCommand<RmCommand>("rm").WithDescription("Remove an entry.");
+    c.AddCommand<MvCommand>("mv").WithDescription("Move or rename an entry (metadata + ciphertext preserved).");
     c.AddCommand<SearchCommand>("search").WithDescription("Fuzzy search across plaintext metadata.");
     c.AddCommand<TagsCommand>("tags").WithDescription("List all tags in use with entry counts.");
     c.AddCommand<ConfigCommand>("config").WithDescription("Show or update pwvault config (subcommands: show, set, path).");
     c.AddCommand<GenCommand>("gen").WithDescription("Generate a random password.");
+    c.AddCommand<RotateMasterCommand>("rotate-master").WithDescription("Re-encrypt every field with a new master password.");
+    c.AddCommand<SyncCommand>("sync").WithDescription("Pull remote changes (rebase + autostash) then push local commits.");
+    c.AddCommand<GuiCommand>("gui").WithDescription("Launch read-only TUI browser (same as -g / --gui).");
 });
+
+var effectiveArgs = args;
+if (args.Any(a => a == "-g" || a == "--gui"))
+{
+    effectiveArgs = new[] { "gui" }
+        .Concat(args.Where(a => a != "-g" && a != "--gui"))
+        .ToArray();
+}
 
 try
 {
-    return await app.RunAsync(args);
+    return await app.RunAsync(effectiveArgs);
 }
 catch (VaultNotConfiguredException ex)
 {

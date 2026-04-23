@@ -133,6 +133,35 @@ public sealed class VaultStorage : IVaultStorage
         _fs.DeleteFile(file);
     }
 
+    public StoredEntry Move(EntryPath source, EntryPath destination, bool overwrite = false)
+    {
+        EnsureNotDisposed();
+
+        var existing = TryGet(source) ?? throw new EntryNotFoundException(source);
+
+        if (source == destination)
+            return existing;
+
+        var destinationFile = GetFilePath(destination);
+        if (_fs.FileExists(destinationFile) && !overwrite)
+            throw new EntryAlreadyExistsException(destination);
+
+        var now = _time.GetUtcNow();
+        var moved = existing.Entry with
+        {
+            Path = destination,
+            Created = existing.Entry.Created,
+            Updated = now,
+        };
+        WriteEntry(moved, destinationFile);
+
+        var stored = new StoredEntry(moved, BuildMetadata(destinationFile));
+        VerifyRoundtrip(stored);
+
+        _fs.DeleteFile(GetFilePath(source));
+        return stored;
+    }
+
     public IReadOnlyList<StoredEntry> Search(string query, int maxResults = 20, IReadOnlyList<string>? tags = null)
     {
         EnsureNotDisposed();

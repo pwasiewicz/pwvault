@@ -18,6 +18,8 @@ public interface IVaultStorage : IDisposable
 
     void Remove(EntryPath path);
 
+    StoredEntry Move(EntryPath source, EntryPath destination, bool overwrite = false);
+
     IReadOnlyList<StoredEntry> Search(string query, int maxResults = 20, IReadOnlyList<string>? tags = null);
 
     IReadOnlyList<TagCount> ListTags();

@@ -8,7 +8,7 @@ Osobisty menedżer haseł. Self-hosted przez git, zero cudzej chmury, master pas
 - **Master password w głowie, zero plików-kluczy.** Nowy komp / u ziomka: `git clone` + hasło = działa.
 - **Emergency recovery bez własnego toola.** W krytycznej sytuacji kopiuj zaszyfrowany string z github.com w przeglądarce → `age -d` → masz hasło. Nawet bez klonowania repo, nawet bez swojej binarki.
 - **Nie piszemy własnego krypto.** Wszystko stoi na `age` (spec Filippo Valsordy, universal CLI decryptor).
-- **Scope discipline.** CLI first, web second. Nie robimy OTP, TOTP, autofill, mobile, browser extension, sharing.
+- **Scope discipline.** CLI first, web second, TUI (fullscreen k9s-like) jako dodatkowy front nad tym samym `Core`. Nie robimy OTP, TOTP, autofill, mobile, browser extension, sharing.
 
 ## Format storage
 
@@ -249,12 +249,14 @@ interface IAgeGateway {
 - `pwvault get <name>` — `CryptoService.DecryptPassword(entry)` → jeśli `MasterNeeded`, prompt i retry z `masterPassword` argumentem (bez zapisu do sesji, chyba że CLI zdecyduje)
 - `pwvault edit <name>` — **lazy auth**: master wymagany tylko gdy zmiana dotyka pola szyfrowanego (`--password`, `--regenerate`, `--notes`, `--clear-notes`). Edycja samej metadanych (title/url/tags) nie żąda master password ani nie sprawdza sentinela. Świadomy trade-off: sentinel chroni przed typo przy re-encrypt, a metadata-only edit niczego nie re-encryptuje.
 - `pwvault lock` — `sessionStore.Clear()`
+- `pwvault -g` / `--gui` — alias dla komendy `gui` (fullscreen Terminal.Gui read-only, patrz sekcja "TUI fullscreen mode")
 - Zmiana środowiska/device nie psuje nic — fallback do promptu zawsze działa
 
 ## Git workflow
 
 - Repo prywatne (GitHub / Gitea / cokolwiek)
 - Każda modyfikacja vaulta → auto-commit + push (konfigurowalne)
+- Sync między urządzeniami: `pwvault sync` (pull --rebase --autostash + push). Auto-push po mutacji jest opcjonalny — `sync` daje bezpieczną alternatywę "raz na dzień / przed edycją".
 - Merge conflicts: rzadkie (per-file, a sam edytujesz na jednym urządzeniu na raz). Przy konflikcie bierzesz nowszą wersję pliku — tracisz starszą edycję, akceptowalny koszt.
 - Brak własnego sledzenia historii — `git log <path>` załatwia sprawę.
 
@@ -262,7 +264,8 @@ interface IAgeGateway {
 
 - **.NET** (C#, .NET 9+)
 - **age** — jako binary wywoływany subprocessem (najprościej, najbardziej odporne na zmiany spec) LUB .NET libka gdy dojrzała. Default: subprocess.
-- **Spectre.Console** — TUI (prompty, tabele, drzewa, kolor)
+- **Spectre.Console** — CLI rendering (prompty, tabele, drzewa, kolor)
+- **Terminal.Gui** (v1) — fullscreen TUI dla trybu `pwvault -g` / `--gui`
 - **FuzzySharp** — fuzzy search po title/tags
 - **TextCopy** — cross-platform clipboard z auto-clear przez `Task.Delay`
 - **System.Text.Json** — serializacja wpisów
@@ -284,10 +287,13 @@ interface IAgeGateway {
 - [x] `pwvault tags` — lista tagów w użyciu z licznikami
 - [x] Tagi — `--tag <name>` (repeatable) w `add`, `ls`, `search`; normalizacja kanoniczna w `TagNormalizer`
 - [x] `pwvault edit <path>` — edycja istniejącego wpisu (interactive albo flag-driven); path immutable (rename → `mv`)
+- [x] `pwvault mv <src> <dst> [-f]` — przenoszenie/rename wpisu; `created` zachowane, `updated` bumpowane, ciphertext bez zmian (bez re-encrypt), auto-commit `pwvault: mv src -> dst`
+- [x] `pwvault rotate-master` — prompt o stary master (weryfikacja sentinela), nowy z confirmation; kopia zapasowa vaulta do `<vaultPath>.backup.<UTC>/` **przed** jakimkolwiek zapisem; `MasterRotator.Rotate` re-encryptuje każde pole `*_age` przez `storage.Update` (bumpowanie `updated` zaakceptowane — zmieniona zawartość pliku), sentinel przepisywany na końcu; sesja aktualizowana nowym masterem, auto-commit z licznikiem wpisów
 - [x] Interactive picker (`-i` w `get` i `edit`) — `Spectre.Console.SelectionPrompt.EnableSearch()`, substring match po display stringu (path/title/username/tags), współdzielony `InteractiveEntryPicker` w `PwVault.Cli.Infrastructure`
 - [x] `pwvault config` (`show` / `set` / `path`) — reflection nad `PwVaultConfig`, snake_case ⇄ PascalCase, typed parsing (bool/int/string z expansion `~/`), atomic write (temp + rename)
 - [x] `init` auto-zapisuje `vault_path` do `~/.config/pwvault/config.json` (first vault ⇒ silent, istniejący default ⇒ prompt, `-y` akceptuje, `--no-save-config` pomija)
 - [x] Auto-commit po każdej mutacji (konfigurowalne; auto-push opcjonalne)
+- [x] `pwvault sync` — `git pull --rebase --autostash` + `git push`; wymaga skonfigurowanego upstream; przy konflikcie rebase kończy z kodem błędu i instrukcją ręcznego dokończenia (repo zostaje w stanie in-progress rebase)
 
 **Weryfikacja master:** `.vault.json` z encrypted sentinel (stały plaintext `pwvault-sentinel-v1` zaszyfrowany master passwordem). Weryfikacja przed każdym write — zapobiega zapisom z typo w master password, które byłyby potem nieodzyskiwalne.
 
@@ -295,10 +301,34 @@ interface IAgeGateway {
 
 ### Iteracja 2 (planowane)
 
-- [ ] `pwvault mv <src> <dst>` — przenoszenie
 - [ ] `pwvault import bitwarden <json>` — import z Bitwardena
 - [ ] Interaktywny TUI picker (`pwvault` bez argumentów → Spectre.Console lista z live fuzzy)
-- [ ] `pwvault rotate-master` — rotacja master password (re-encrypt wszystkich pól `*_age` + sentinel)
+
+### TUI fullscreen mode (`pwvault -g` / `--gui`)
+
+Fullscreen k9s-like browser nad tym samym `Core`. Nie zastępuje CLI — dodatkowy tryb uruchamiany na żądanie. Integracja ze Spectre.Console.Cli przez komendę `gui` + argv remap w `Program.cs` (`-g` / `--gui` w dowolnej pozycji → `gui <reszta>`).
+
+**Zrobione (PoC read-only):**
+- [x] `GuiCommand` + `VaultGuiApp` w `PwVault.Cli`, Terminal.Gui 1.19
+- [x] Master password pytany **przed** `Application.Init()` (Spectre prompt) — `AnsiConsole` i event loop Terminal.Gui nie mogą współdzielić terminala; po uwierzytelnieniu master siedzi w `ISessionStore`, TUI korzysta przez `ICryptoService` tak jak CLI
+- [x] Lista wpisów (flat, `path — title`), filter-as-you-type (matchuje path/title/username/url/tagi, case-insensitive)
+- [x] Panel szczegółów pokazuje plaintext metadata; `notes` oznaczone `<encrypted>` bez deszyfracji
+- [x] **Lazy decrypt** — `Enter` deszyfruje hasło tylko dla podświetlonego wpisu i kopiuje do clipboardu; nawigacja strzałkami nie uruchamia scrypt
+- [x] Auto-clear clipboardu po `ClipboardClearSeconds` — background `Task.Delay` z epoch-guardem (kolejna kopia unieważnia poprzedni timer), czyszczenie tylko jeśli clipboard nadal trzyma skopiowaną wartość
+- [x] Dark theme — globalny `ColorScheme` override (czarne tło, BrightYellow akcenty, status bar odwrócony)
+- [x] Keybindings: `Enter` = copy, `/` = focus filter, strzałka-w-dół z filtera = przejście na listę, `q`/`Esc` = quit
+
+**Świadomie poza scope PoC:**
+- Write ops (add / edit / rm) — CLI pozostaje kanonicznym interfejsem do mutacji
+- Reveal password w detail panelu — hasła wyłącznie przez clipboard
+- Notes decrypt w TUI — jeśli trzeba, `pwvault get <path> --notes`
+- Drzewo hierarchiczne — lista płaska jest bliższa UX k9s i lepiej gra z filter-as-you-type
+- Tag filter z UI — na razie trzeba użyć `search -t` w CLI; filter-blob i tak matchuje nazwy tagów
+
+**Ograniczenia:**
+- Wymaga TTY (Terminal.Gui nie działa pod nie-interaktywnym stdin)
+- WSL + Windows Terminal — może mieć drobne kwawki z renderingiem ramek; 1.19 gra stabilnie w dotychczasowych testach
+- Master-password prompt lata przed Terminal.Gui, nie _w_ TUI — świadome uproszczenie, nie planujemy tego przenosić do dialogu w Terminal.Gui dopóki scope jest read-only
 
 ### Iteracja 3 (web)
 

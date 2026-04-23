@@ -131,6 +131,86 @@ public sealed class VaultStorageTests : IDisposable
     }
 
     [Fact]
+    public void Move_renames_entry_preserving_created_and_bumping_updated()
+    {
+        using var storage = NewStorage();
+        var original = storage.Add(SampleEntry("banking/mbank"));
+        Thread.Sleep(10);
+
+        var moved = storage.Move(new EntryPath("banking/mbank"), new EntryPath("banking/mbank-renamed"));
+
+        Assert.Equal("banking/mbank-renamed", moved.Entry.Path.Value);
+        Assert.Equal(original.Entry.Created, moved.Entry.Created);
+        Assert.True(moved.Entry.Updated > original.Entry.Updated);
+        Assert.Equal(original.Entry.PasswordEncrypted, moved.Entry.PasswordEncrypted);
+        Assert.Null(storage.TryGet(new EntryPath("banking/mbank")));
+        Assert.NotNull(storage.TryGet(new EntryPath("banking/mbank-renamed")));
+    }
+
+    [Fact]
+    public void Move_across_directories_creates_destination_dir()
+    {
+        using var storage = NewStorage();
+        storage.Add(SampleEntry("banking/mbank"));
+
+        var moved = storage.Move(new EntryPath("banking/mbank"), new EntryPath("archived/banking/mbank"));
+
+        Assert.Equal("archived/banking/mbank", moved.Entry.Path.Value);
+        Assert.Null(storage.TryGet(new EntryPath("banking/mbank")));
+        Assert.NotNull(storage.TryGet(new EntryPath("archived/banking/mbank")));
+    }
+
+    [Fact]
+    public void Move_missing_source_throws()
+    {
+        using var storage = NewStorage();
+        Assert.Throws<EntryNotFoundException>(() =>
+            storage.Move(new EntryPath("nope"), new EntryPath("new")));
+    }
+
+    [Fact]
+    public void Move_to_existing_destination_without_overwrite_throws()
+    {
+        using var storage = NewStorage();
+        storage.Add(SampleEntry("a"));
+        storage.Add(SampleEntry("b"));
+
+        Assert.Throws<EntryAlreadyExistsException>(() =>
+            storage.Move(new EntryPath("a"), new EntryPath("b")));
+
+        Assert.NotNull(storage.TryGet(new EntryPath("a")));
+        Assert.NotNull(storage.TryGet(new EntryPath("b")));
+    }
+
+    [Fact]
+    public void Move_to_existing_destination_with_overwrite_replaces_it()
+    {
+        using var storage = NewStorage();
+        var source = storage.Add(SampleEntry("a", title: "Source"));
+        storage.Add(SampleEntry("b", title: "Destination"));
+
+        var moved = storage.Move(new EntryPath("a"), new EntryPath("b"), overwrite: true);
+
+        Assert.Equal("Source", moved.Entry.Title);
+        Assert.Equal(source.Entry.Created, moved.Entry.Created);
+        Assert.Null(storage.TryGet(new EntryPath("a")));
+        Assert.Equal("Source", storage.Get(new EntryPath("b")).Entry.Title);
+    }
+
+    [Fact]
+    public void Move_same_source_and_destination_is_noop()
+    {
+        using var storage = NewStorage();
+        var original = storage.Add(SampleEntry("a"));
+
+        var result = storage.Move(new EntryPath("a"), new EntryPath("a"));
+
+        Assert.Equal(original.Entry.Updated, result.Entry.Updated);
+        Assert.Equal(original.Entry.Created, result.Entry.Created);
+        Assert.NotNull(storage.TryGet(new EntryPath("a")));
+    }
+
+    [Fact]
     public void List_returns_all_entries_recursively()
     {
         using var storage = NewStorage();

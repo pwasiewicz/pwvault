@@ -1,5 +1,6 @@
 using System.Text;
 using PwVault.Core.Security;
+using PwVault.Core.Security.Age;
 
 namespace PwVault.Core.Tests.Security;
 
@@ -40,7 +41,7 @@ internal sealed class FakeAgeGateway : IAgeGateway
         var plaintext = payload[(separatorIndex + 1)..];
 
         if (embeddedPassphrase != passphrase)
-            throw new InvalidOperationException("Wrong passphrase.");
+            throw new InvalidPassphraseException();
 
         return plaintext;
     }

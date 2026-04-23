@@ -25,6 +25,29 @@ public static class GitRunner
     public static void Push(string directory) =>
         RunOrThrow(directory, ["push"]);
 
+    public static bool HasUpstream(string directory) =>
+        Run(directory, ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"]).ExitCode == 0;
+
+    public readonly record struct GitOutcome(int ExitCode, string Output, string Error)
+    {
+        public bool Succeeded => ExitCode == 0;
+        public string CombinedText => string.Join(
+            "\n",
+            new[] { Output, Error }.Where(s => !string.IsNullOrWhiteSpace(s)));
+    }
+
+    public static GitOutcome TryPullRebaseAutostash(string directory)
+    {
+        var r = Run(directory, ["pull", "--rebase", "--autostash"]);
+        return new GitOutcome(r.ExitCode, r.Output, r.Error);
+    }
+
+    public static GitOutcome TryPush(string directory)
+    {
+        var r = Run(directory, ["push"]);
+        return new GitOutcome(r.ExitCode, r.Output, r.Error);
+    }
+
     public static void AutoCommitIfRepo(string directory, string message, bool autoPush)
     {
         if (!IsGitRepo(directory)) return;
