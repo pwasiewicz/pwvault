@@ -239,20 +239,110 @@ Pełna lista kluczy i domyślnych wartości:
 
 Lekki Blazor Server w `src/PwVault.Web` — ciemny motyw w stylu terminala, ASCII-tree, substring search po path/title/username/tagach, copy-to-clipboard. Master password trzymany w pamięci per-circuit (refresh / zamknięcie zakładki = lock).
 
-```bash
-# Skonfiguruj vault_path w appsettings.json (albo appsettings.Development.json):
-#   "PwVault": { "VaultPath": "/home/you/vault" }
-
-dotnet run --project src/PwVault.Web
-# → http://localhost:5000 (lub port przypisany przez Kestrel)
-# → login → master password → /vault
-```
-
 **Ograniczenia MVP (świadomie):**
 - Tylko odczyt (add/edit/rm nadal przez CLI)
-- Zero auth — tylko localhost. Dla self-hosted: Tailscale / reverse proxy / basic auth.
+- Zero wbudowanego auth — serwer wierzy każdemu, kto się do niego dopukał. Wystaw wyłącznie za **warstwą auth** (Tailscale, reverse proxy z basic auth, VPN). Nigdy goły port na publiczny interfejs.
 - Brak auto-lock (cyrkuł Blazora disconnectuje sam po paru minutach → master GC'owany)
-- Nie robi `git pull` — patrzy na lokalny stan repo
+- Nie robi `git pull` — patrzy na lokalny stan repo, sync robisz osobno (`pwvault sync` w cronie/systemd timerze)
+
+### Lokalnie (dev)
+
+```bash
+# appsettings.Development.json → "PwVault": { "VaultPath": "/home/you/vault" }
+dotnet run --project src/PwVault.Web
+# → http://localhost:5016 (port z Properties/launchSettings.json)
+```
+
+### Self-contained publish (serwer)
+
+Analogicznie do CLI — jedna binarka, zero zależności runtime:
+
+```bash
+dotnet publish src/PwVault.Web/PwVault.Web.csproj \
+  -c Release -r linux-x64 --self-contained \
+  -p:PublishSingleFile=true \
+  -p:IncludeNativeLibrariesForSelfExtract=true \
+  -o /opt/pwvault-web
+```
+
+Konfigurację przekazujesz zmiennymi środowiskowymi (ASP.NET mapuje `__` na zagnieżdżoną sekcję):
+
+```bash
+export PwVault__VaultPath=/home/you/vault
+export ASPNETCORE_URLS=http://127.0.0.1:5016   # tylko loopback; proxy wystawi HTTPS
+/opt/pwvault-web/PwVault.Web
+```
+
+`127.0.0.1` celowo — nie bindujemy `0.0.0.0` bez warstwy auth przed nami.
+
+### systemd unit (szkielet)
+
+`/etc/systemd/system/pwvault-web.service`:
+
+```ini
+[Unit]
+Description=pw-vault web UI (read-only)
+After=network.target
+
+[Service]
+Type=simple
+User=pwvault
+WorkingDirectory=/home/pwvault
+Environment=ASPNETCORE_URLS=http://127.0.0.1:5016
+Environment=ASPNETCORE_ENVIRONMENT=Production
+Environment=PwVault__VaultPath=/home/pwvault/vault
+ExecStart=/opt/pwvault-web/PwVault.Web
+Restart=on-failure
+RestartSec=5
+# Hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/pwvault/vault
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now pwvault-web
+```
+
+### Wariant A — Tailscale (zalecane, zero konfigu TLS)
+
+Bindujesz do adresu Tailscale i koniec. Dostęp z twoich urządzeń w tailnecie, zero publicznej ekspozycji.
+
+```bash
+# zamiast 127.0.0.1:
+export ASPNETCORE_URLS=http://$(tailscale ip -4):5016
+```
+
+Opcjonalnie MagicDNS + `tailscale serve` / `tailscale funnel` jeśli chcesz HTTPS z prawdziwym certem.
+
+### Wariant B — reverse proxy + TLS (Caddy)
+
+Blazor Server używa WebSocketów — proxy musi je przepuścić. Caddy robi to domyślnie:
+
+```caddy
+vault.example.com {
+    reverse_proxy 127.0.0.1:5016
+    # opcjonalnie basic auth jako drugi zamek:
+    basicauth {
+        you $2a$14$... # caddy hash-password
+    }
+}
+```
+
+Nginx: pamiętaj o `proxy_set_header Upgrade $http_upgrade; proxy_set_header Connection "upgrade";` oraz odpowiednim `proxy_read_timeout` (Blazor circuit trzyma długie połączenie).
+
+### Upgrade
+
+```bash
+cd pw-vault && git pull
+dotnet publish ... -o /opt/pwvault-web   # jak wyżej
+sudo systemctl restart pwvault-web
+```
 
 Architektura i roadmapa: [ARCH.md](./ARCH.md), sekcja **Iteracja 3 (web)**.
 
