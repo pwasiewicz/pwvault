@@ -70,10 +70,12 @@ public sealed class AddCommand : Command<AddCommand.Settings>
             new TextPrompt<string>("Title:").DefaultValue(entryPath.Name).ShowDefaultValue());
         var username = settings.Username ?? AnsiConsole.Prompt(
             new TextPrompt<string>("Username:").AllowEmpty());
-        var url = settings.Url ?? AnsiConsole.Prompt(
-            new TextPrompt<string>("URL:").AllowEmpty());
 
         var password = ResolvePassword(settings);
+
+        var tags = ResolveTags(settings);
+        var url = settings.Url ?? AnsiConsole.Prompt(
+            new TextPrompt<string>("URL (optional):").AllowEmpty());
         var notes = settings.Notes ?? AnsiConsole.Prompt(
             new TextPrompt<string>("Notes (optional, encrypted):").AllowEmpty());
 
@@ -90,7 +92,7 @@ public sealed class AddCommand : Command<AddCommand.Settings>
             PasswordEncrypted: passwordAge,
             NotesEncrypted: notesAge)
         {
-            Tags = settings.Tags ?? Array.Empty<string>(),
+            Tags = tags,
         };
 
         storage.Add(entry);
@@ -100,6 +102,14 @@ public sealed class AddCommand : Command<AddCommand.Settings>
 
         AnsiConsole.MarkupLine($"[green]Added entry:[/] {Markup.Escape(entryPath.Value)}");
         return 0;
+    }
+
+    private static IReadOnlyList<string> ResolveTags(Settings settings)
+    {
+        if (settings.Tags is { Length: > 0 })
+            return TagNormalizer.Normalize(settings.Tags);
+
+        return TagPrompt.Prompt("Tags (comma-separated, optional):");
     }
 
     private string ResolvePassword(Settings settings)

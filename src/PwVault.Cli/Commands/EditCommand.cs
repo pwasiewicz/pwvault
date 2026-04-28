@@ -243,13 +243,7 @@ public sealed class EditCommand : Command<EditCommand.Settings>
         if (urlNew != current.Url) plan.SetUrl(urlNew);
 
         var tagsDefault = string.Join(", ", current.Tags);
-        var tagsInput = AnsiConsole.Prompt(
-            new TextPrompt<string>("Tags (comma-separated):")
-                .DefaultValue(tagsDefault)
-                .ShowDefaultValue()
-                .AllowEmpty());
-        var parsedTags = tagsInput.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        var normalizedTags = TagNormalizer.Normalize(parsedTags);
+        var normalizedTags = TagPrompt.Prompt("Tags (comma-separated):", tagsDefault);
         if (!normalizedTags.SequenceEqual(current.Tags, StringComparer.Ordinal))
             plan.NewTags = normalizedTags;
 
